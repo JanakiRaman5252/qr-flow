@@ -1,0 +1,400 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id               String         @id @default(cuid())
+  name             String
+  email            String         @unique
+  image            String?
+  twoFactorEnabled Boolean        @default(false)
+  twoFactorSecret  String?
+  role             Role           @default(VIEWER)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  emailVerified    Boolean        @default(false)
+  apiKeys          APIKey[]
+  accounts         Account[]
+  auditLogs        AuditLog[]
+  folders          Folder[]
+  memberships      Member[]
+  notifications    Notification[]
+  createdQRs       QRCode[]
+  sessions         Session[]
+  tags             Tag[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  token     String   @unique
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Organization {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  logo          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  apiKeys       APIKey[]
+  auditLogs     AuditLog[]
+  coupons       CouponUsage[]
+  customDomains CustomDomain[]
+  folders       Folder[]
+  members       Member[]
+  qrCodes       QRCode[]
+  subscription  Subscription?
+  tags          Tag[]
+  webhooks      Webhook[]
+}
+
+model Member {
+  id             String       @id @default(cuid())
+  role           Role         @default(EDITOR)
+  userId         String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+model QRCode {
+  id              String       @id @default(cuid())
+  title           String
+  shortCode       String       @unique
+  type            QRType       @default(WEBSITE)
+  destinationUrl  String
+  fallbackUrl     String?
+  description     String?
+  fgColor         String       @default("#000000")
+  bgColor         String       @default("#FFFFFF")
+  logoUrl         String?
+  logoWidth       Int?
+  logoHeight      Int?
+  frameTemplate   String?
+  frameText       String?
+  dotsStyle       String       @default("square")
+  cornerDotsStyle String       @default("square")
+  passwordHash    String?
+  expiresAt       DateTime?
+  startsAt        DateTime?
+  maxScans        Int?
+  scanCount       Int          @default(0)
+  isArchived      Boolean      @default(false)
+  isFavorite      Boolean      @default(false)
+  isInTrash       Boolean      @default(false)
+  redirectRules   Json?
+  organizationId  String
+  creatorId       String
+  folderId        String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  creator         User         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  folder          Folder?      @relation(fields: [folderId], references: [id])
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions        QRVersion[]
+  scans           ScanEvent[]
+  tags            TagOnQR[]
+}
+
+model QRVersion {
+  id             String   @id @default(cuid())
+  qrCodeId       String
+  destinationUrl String
+  redirectRules  Json?
+  versionNumber  Int
+  createdAt      DateTime @default(now())
+  qrCode         QRCode   @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+}
+
+model Folder {
+  id             String       @id @default(cuid())
+  name           String
+  color          String?      @default("#4F46E5")
+  organizationId String
+  creatorId      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  creator        User         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  qrCodes        QRCode[]
+}
+
+model Tag {
+  id             String       @id @default(cuid())
+  name           String
+  color          String?      @default("#06B6D4")
+  organizationId String
+  creatorId      String
+  createdAt      DateTime     @default(now())
+  creator        User         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  qrCodes        TagOnQR[]
+
+  @@unique([name, organizationId])
+}
+
+model TagOnQR {
+  qrCodeId String
+  tagId    String
+  qrCode   QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([qrCodeId, tagId])
+}
+
+model ScanEvent {
+  id          String   @id @default(cuid())
+  qrCodeId    String
+  timestamp   DateTime @default(now())
+  ipAddress   String?
+  country     String?
+  region      String?
+  city        String?
+  browser     String?
+  device      String?
+  os          String?
+  referrer    String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  language    String?
+  timezone    String?
+  screenSize  String?
+  isUnique    Boolean  @default(true)
+  isReturning Boolean  @default(false)
+  qrCode      QRCode   @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id                     String               @id @default(cuid())
+  organizationId         String               @unique
+  razorpaySubscriptionId String?              @unique
+  razorpayCustomerId     String?
+  plan                   SubscriptionPlanTier @default(FREE)
+  status                 SubscriptionStatus   @default(INACTIVE)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  trialEndsAt            DateTime?
+  canceledAt             DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  payments               Payment[]
+  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id                String       @id @default(cuid())
+  subscriptionId    String
+  razorpayPaymentId String       @unique
+  razorpayOrderId   String?
+  amount            Int
+  currency          String       @default("INR")
+  status            String
+  receiptUrl        String?
+  createdAt         DateTime     @default(now())
+  subscription      Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+}
+
+model CustomDomain {
+  id             String       @id @default(cuid())
+  domain         String       @unique
+  organizationId String
+  verified       Boolean      @default(false)
+  sslActive      Boolean      @default(false)
+  dnsTxtRecord   String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model APIKey {
+  id             String       @id @default(cuid())
+  name           String
+  key            String       @unique
+  scopes         String[]
+  organizationId String
+  creatorId      String
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  creator        User         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  action         String
+  entity         String
+  entityId       String?
+  metadata       Json?
+  organizationId String
+  userId         String?
+  ipAddress      String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id])
+}
+
+model Webhook {
+  id             String            @id @default(cuid())
+  name           String
+  url            String
+  secret         String
+  events         String[]
+  isActive       Boolean           @default(true)
+  organizationId String
+  createdAt      DateTime          @default(now())
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries     WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  webhookId    String
+  event        String
+  payload      Json
+  responseCode Int?
+  error        String?
+  deliveredAt  DateTime @default(now())
+  webhook      Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+}
+
+model Coupon {
+  id              String        @id @default(cuid())
+  code            String        @unique
+  discountPercent Int?
+  discountAmount  Int?
+  maxUses         Int?
+  usesCount       Int           @default(0)
+  expiresAt       DateTime?
+  createdAt       DateTime      @default(now())
+  usages          CouponUsage[]
+}
+
+model CouponUsage {
+  id             String       @id @default(cuid())
+  couponId       String
+  organizationId String
+  usedAt         DateTime     @default(now())
+  coupon         Coupon       @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  isEnabled   Boolean  @default(false)
+  rules       Json?
+  updatedAt   DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("info")
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum QRType {
+  WEBSITE
+  PDF
+  IMAGE
+  VIDEO
+  VCARD
+  EMAIL
+  PHONE
+  SMS
+  WHATSAPP
+  WIFI
+  APP_STORE
+  GOOGLE_PLAY
+  GOOGLE_MAPS
+  LOCATION
+  TEXT
+  EVENT
+  CALENDAR
+  RESTAURANT_MENU
+  DIGITAL_BUSINESS_CARD
+  SOCIAL_LINKS
+  YOUTUBE
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  X
+  TIKTOK
+  CUSTOM_REDIRECT
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum SubscriptionPlanTier {
+  FREE
+  STARTER
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
