@@ -1,5 +1,5 @@
 import type { NextConfig } from 'next'
-
+// nextjs config
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
