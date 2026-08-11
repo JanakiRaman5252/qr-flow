@@ -69,22 +69,27 @@ model Verification {
 }
 
 model Organization {
-  id            String         @id @default(cuid())
-  name          String
-  slug          String         @unique
-  logo          String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  apiKeys       APIKey[]
-  auditLogs     AuditLog[]
-  coupons       CouponUsage[]
-  customDomains CustomDomain[]
-  folders       Folder[]
-  members       Member[]
-  qrCodes       QRCode[]
-  subscription  Subscription?
-  tags          Tag[]
-  webhooks      Webhook[]
+  id               String             @id @default(cuid())
+  name             String
+  slug             String             @unique
+  logo             String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  apiKeys          APIKey[]
+  auditLogs        AuditLog[]
+  billingAuditLogs BillingAuditLog[]
+  coupons          CouponUsage[]
+  customDomains    CustomDomain[]
+  folders          Folder[]
+  invoices         Invoice[]
+  members          Member[]
+  payments         Payment[]
+  qrCodes          QRCode[]
+  subscription     Subscription?
+  tags             Tag[]
+  usageCounters    UsageCounter[]
+  usageEvents      UsageEvent[]
+  webhooks         Webhook[]
 }
 
 model Member {
@@ -208,35 +213,198 @@ model ScanEvent {
   qrCode      QRCode   @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
 }
 
+// ─────────────────────────────────────────────
+// BILLING & SUBSCRIPTION SYSTEM
+// ─────────────────────────────────────────────
+
+model Plan {
+  id                    String            @id @default(cuid())
+  name                  String
+  slug                  String            @unique
+  description           String?
+  monthlyPrice          Int               @default(0)
+  yearlyPrice           Int               @default(0)
+  currency              String            @default("INR")
+  trialDays             Int               @default(0)
+  isFree                Boolean           @default(false)
+  isActive              Boolean           @default(true)
+  isRecommended         Boolean           @default(false)
+  sortOrder             Int               @default(0)
+  razorpayPlanIdMonthly String?
+  razorpayPlanIdYearly  String?
+  marketingFeatures     Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  entitlements          PlanEntitlement[]
+  subscriptions         Subscription[]
+  nextPlanSubscriptions Subscription[]    @relation("NextPlan")
+}
+
+model PlanEntitlement {
+  id             String              @id @default(cuid())
+  planId         String
+  entitlementKey String
+  valueType      EntitlementValueType
+  numericValue   Int?
+  booleanValue   Boolean?
+  createdAt      DateTime            @default(now())
+  plan           Plan                @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, entitlementKey])
+}
+
 model Subscription {
   id                     String               @id @default(cuid())
   organizationId         String               @unique
+  planId                 String?
   razorpaySubscriptionId String?              @unique
   razorpayCustomerId     String?
-  plan                   SubscriptionPlanTier @default(FREE)
   status                 SubscriptionStatus   @default(INACTIVE)
+  billingCycle           BillingCycle?
+  amount                 Int?
+  currency               String               @default("INR")
   currentPeriodStart     DateTime?
   currentPeriodEnd       DateTime?
-  trialEndsAt            DateTime?
+  trialStart             DateTime?
+  trialEnd               DateTime?
+  cancelAtPeriodEnd      Boolean              @default(false)
   canceledAt             DateTime?
+  endedAt                DateTime?
+  nextPlanId             String?
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
+  plan                   Plan?                @relation(fields: [planId], references: [id])
+  nextPlan               Plan?                @relation("NextPlan", fields: [nextPlanId], references: [id])
   payments               Payment[]
   organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events                 SubscriptionEvent[]
+  invoices               Invoice[]
+
+  @@index([status])
+  @@index([planId])
 }
 
 model Payment {
-  id                String       @id @default(cuid())
+  id                String        @id @default(cuid())
   subscriptionId    String
-  razorpayPaymentId String       @unique
+  organizationId    String?
+  razorpayPaymentId String        @unique
   razorpayOrderId   String?
   amount            Int
-  currency          String       @default("INR")
+  currency          String        @default("INR")
   status            String
+  methodType        String?
+  failureReason     String?
   receiptUrl        String?
-  createdAt         DateTime     @default(now())
-  subscription      Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  metadata          Json?
+  createdAt         DateTime      @default(now())
+  subscription      Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organization      Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
 }
+
+model Invoice {
+  id                String        @id @default(cuid())
+  invoiceNumber     String        @unique
+  organizationId    String
+  subscriptionId    String?
+  providerInvoiceId String?       @unique
+  subtotal          Int           @default(0)
+  tax               Int           @default(0)
+  discount          Int           @default(0)
+  total             Int           @default(0)
+  currency          String        @default("INR")
+  status            InvoiceStatus @default(DRAFT)
+  invoiceUrl        String?
+  issuedAt          DateTime      @default(now())
+  dueAt             DateTime?
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription      Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@index([organizationId])
+}
+
+model UsageCounter {
+  id             String       @id @default(cuid())
+  organizationId String
+  metric         String
+  periodStart    DateTime
+  periodEnd      DateTime
+  usage          Int          @default(0)
+  limitSnapshot  Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, metric, periodStart, periodEnd])
+  @@index([organizationId, metric])
+}
+
+model UsageEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  metric         String
+  quantity       Int          @default(1)
+  source         String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, metric, createdAt])
+}
+
+model BillingWebhookEvent {
+  id           String             @id @default(cuid())
+  provider     String
+  eventId      String
+  eventType    String
+  payload      Json
+  status       WebhookEventStatus @default(PENDING)
+  receivedAt   DateTime           @default(now())
+  processedAt  DateTime?
+  errorMessage String?
+
+  @@unique([provider, eventId])
+  @@index([eventType, status])
+}
+
+model SubscriptionEvent {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  eventType      String
+  previousState  Json?
+  newState       Json?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt])
+}
+
+model BillingAuditLog {
+  id             String       @id @default(cuid())
+  actorId        String?
+  organizationId String
+  action         String
+  entityType     String
+  entityId       String?
+  previousState  Json?
+  newState       Json?
+  requestId      String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([action, entityType])
+}
+
+// ─────────────────────────────────────────────
+// EXISTING DOMAIN MODELS (Unchanged)
+// ─────────────────────────────────────────────
 
 model CustomDomain {
   id             String       @id @default(cuid())
@@ -345,6 +513,10 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
 enum Role {
   OWNER
   ADMIN
@@ -387,14 +559,34 @@ enum SubscriptionStatus {
   TRIALING
   ACTIVE
   PAST_DUE
+  PAUSED
   CANCELED
   EXPIRED
+  INCOMPLETE
 }
 
-enum SubscriptionPlanTier {
-  FREE
-  STARTER
-  PRO
-  BUSINESS
-  ENTERPRISE
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum EntitlementValueType {
+  BOOLEAN
+  NUMERIC
+  UNLIMITED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  VOID
+  UNCOLLECTIBLE
+}
+
+enum WebhookEventStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  SKIPPED
 }

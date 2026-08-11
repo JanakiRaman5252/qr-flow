@@ -1,236 +1,454 @@
 'use client'
 
-import { useState } from 'react'
-import { CreditCard, CheckCircle2, Zap, Shield, FileText, ArrowUpRight, Check, Sparkles } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import {
+  CreditCard,
+  QrCode,
+  Users,
+  BarChart2,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Sparkles,
+} from 'lucide-react'
+import { UsageCard } from '@/components/billing/UsageCard'
+import { SubscriptionStatusBadge } from '@/components/billing/SubscriptionStatus'
+import { BillingCycleToggle } from '@/components/billing/BillingCycleToggle'
+import { PlanCard } from '@/components/billing/PlanCard'
+import { PaymentHistory } from '@/components/billing/PaymentHistory'
+import { TrialBanner } from '@/components/billing/TrialBanner'
+import { formatPrice } from '@/lib/billing/plans'
 
-const mockInvoices = [
-  { id: 'inv_1001', date: '2026-07-01', amount: '₹1,499', plan: 'Pro Monthly', status: 'Paid', receiptUrl: '#' },
-  { id: 'inv_1000', date: '2026-06-01', amount: '₹1,499', plan: 'Pro Monthly', status: 'Paid', receiptUrl: '#' },
-  { id: 'inv_0999', date: '2026-05-01', amount: '₹1,499', plan: 'Pro Monthly', status: 'Paid', receiptUrl: '#' },
-]
+declare global {
+  interface Window {
+    Razorpay: any
+  }
+}
+
+interface TrialEligibility {
+  planId: string
+  planSlug: string
+  planName: string
+  trialDays: number
+  canTrial: boolean
+  reason: string | null
+}
 
 export default function BillingPage() {
-  const [couponCode, setCouponCode] = useState('')
-  const [couponMessage, setCouponMessage] = useState('')
+  const [subscription, setSubscription] = useState<any>(null)
+  const [plans, setPlans] = useState<any[]>([])
+  const [usage, setUsage] = useState<any[]>([])
+  const [payments, setPayments] = useState<any[]>([])
+  const [invoices, setInvoices] = useState<any[]>([])
+  const [trialEligibility, setTrialEligibility] = useState<TrialEligibility[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [cycle, setCycle] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY')
+  const [processingPlanId, setProcessingPlanId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null)
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!couponCode.trim()) return
-    if (couponCode.toUpperCase() === 'WELCOME20') {
-      setCouponMessage('🎉 Coupon applied! 20% discount added to your next renewal.')
-    } else {
-      setCouponMessage('❌ Invalid or expired coupon code.')
+  useEffect(() => {
+    // Load Razorpay Checkout SDK
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.async = true
+    document.body.appendChild(script)
+    return () => {
+      document.body.removeChild(script)
+    }
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true)
+      const [subRes, plansRes, usageRes, pmtRes, invRes, trialRes] = await Promise.all([
+        fetch('/api/billing/subscription'),
+        fetch('/api/billing/plans'),
+        fetch('/api/billing/usage'),
+        fetch('/api/billing/payments'),
+        fetch('/api/billing/invoices'),
+        fetch('/api/billing/trial'),
+      ])
+
+      const subData = await subRes.json()
+      const plansData = await plansRes.json()
+      const usageData = await usageRes.json()
+      const pmtData = await pmtRes.json()
+      const invData = await invRes.json()
+      const trialData = await trialRes.json()
+
+      if (subData.success) setSubscription(subData.data)
+      if (plansData.success) setPlans(plansData.data)
+      if (usageData.success) setUsage(usageData.data)
+      if (pmtData.success) setPayments(pmtData.data?.items || [])
+      if (invData.success) setInvoices(invData.data?.items || [])
+      if (trialData.success) setTrialEligibility(trialData.data || [])
+    } catch (err) {
+      console.error('Failed to load billing data:', err)
+      setActionError('Failed to load billing information.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleUpgrade = (planName: string, amount: number) => {
-    // Triggers Razorpay Checkout modal
-    const options = {
-      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-      amount: amount * 100, // paise
-      currency: 'INR',
-      name: 'QRFlow SaaS',
-      description: `Upgrade to ${planName} Plan`,
-      handler: function (response: any) {
-        alert(`Payment successful! Payment ID: ${response.razorpay_payment_id}`)
-      },
-      theme: {
-        color: '#4F46E5',
-      },
-    }
+  useEffect(() => {
+    fetchData()
+  }, [])
 
-    if (typeof window !== 'undefined' && (window as any).Razorpay) {
-      const rzp = new (window as any).Razorpay(options)
-      rzp.open()
-    } else {
-      alert(`Razorpay checkout initialized for ${planName} Plan (₹${amount}/mo).`)
+  const handleStartTrial = async (planId: string) => {
+    setActionError(null)
+    setActionSuccess(null)
+    setProcessingPlanId(planId)
+
+    try {
+      const res = await fetch('/api/billing/trial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId }),
+      })
+
+      const json = await res.json()
+
+      if (json.success) {
+        setActionSuccess(json.data?.message || 'Trial started successfully!')
+        fetchData()
+      } else {
+        setActionError(json.message || json.error || 'Failed to start trial.')
+      }
+    } catch (err) {
+      console.error('Start trial error:', err)
+      setActionError('An error occurred while starting the trial.')
+    } finally {
+      setProcessingPlanId(null)
     }
   }
+
+  const handleSelectPlan = async (planId: string) => {
+    setActionError(null)
+    setActionSuccess(null)
+    setProcessingPlanId(planId)
+
+    try {
+      const targetPlan = plans.find((p) => p.id === planId)
+      if (targetPlan?.isFree) {
+        // Free plan transition / downgrade
+        const res = await fetch('/api/billing/downgrade', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planId }),
+        })
+        const json = await res.json()
+        if (json.success) {
+          setActionSuccess(json.data.message || 'Scheduled downgrade to Free plan.')
+          fetchData()
+        } else {
+          setActionError(json.error || json.message || 'Failed to change plan.')
+        }
+        setProcessingPlanId(null)
+        return
+      }
+
+      // Paid plan checkout
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId, billingCycle: cycle }),
+      })
+
+      const json = await res.json()
+
+      if (!json.success) {
+        setActionError(json.message || json.error || 'Checkout initiation failed.')
+        setProcessingPlanId(null)
+        return
+      }
+
+      const checkoutData = json.data
+
+      const options = {
+        key: checkoutData.razorpayKeyId,
+        subscription_id: checkoutData.razorpaySubscriptionId,
+        name: 'DynoQR',
+        description: `${checkoutData.planName} Plan (${cycle.toLowerCase()})`,
+        handler: async function (response: any) {
+          try {
+            const verifyRes = await fetch('/api/billing/checkout/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySubscriptionId: response.razorpay_subscription_id,
+                razorpaySignature: response.razorpay_signature,
+              }),
+            })
+            const verifyJson = await verifyRes.json()
+            if (verifyJson.success) {
+              setActionSuccess('Subscription activated successfully!')
+              fetchData()
+            } else {
+              setActionError(verifyJson.message || 'Payment verification failed.')
+            }
+          } catch (err) {
+            setActionError('Error verifying payment.')
+          } finally {
+            setProcessingPlanId(null)
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setProcessingPlanId(null)
+          },
+        },
+        theme: {
+          color: '#4F46E5',
+        },
+      }
+
+      if (window.Razorpay) {
+        const rzp = new window.Razorpay(options)
+        rzp.open()
+      } else {
+        setActionError('Razorpay SDK failed to load. Refresh and try again.')
+        setProcessingPlanId(null)
+      }
+    } catch (err) {
+      console.error('Plan selection error:', err)
+      setActionError('An error occurred during plan selection.')
+      setProcessingPlanId(null)
+    }
+  }
+
+  const handleCancelSubscription = async (immediate = false) => {
+    if (!confirm('Are you sure you want to cancel your subscription?')) return
+
+    try {
+      const res = await fetch('/api/billing/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ immediate }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        setActionSuccess(json.data.message)
+        fetchData()
+      } else {
+        setActionError(json.error || 'Failed to cancel subscription.')
+      }
+    } catch (err) {
+      setActionError('Cancellation failed.')
+    }
+  }
+
+  const handleResumeSubscription = async () => {
+    try {
+      const res = await fetch('/api/billing/resume', {
+        method: 'POST',
+      })
+      const json = await res.json()
+      if (json.success) {
+        setActionSuccess(json.data.message)
+        fetchData()
+      } else {
+        setActionError(json.error || 'Failed to resume subscription.')
+      }
+    } catch (err) {
+      setActionError('Resume failed.')
+    }
+  }
+
+  // Scroll to plans section when upgrade is clicked from trial banner
+  const handleTrialUpgrade = () => {
+    const plansSection = document.getElementById('available-plans')
+    if (plansSection) {
+      plansSection.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center space-x-3 bg-slate-950 text-slate-400">
+        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+        <span className="text-sm font-medium">Loading billing details...</span>
+      </div>
+    )
+  }
+
+  const currentPlan = subscription?.plan
+  const qrUsage = usage.find((u) => u.metric === 'QR_CODE')
+  const scanUsage = usage.find((u) => u.metric === 'MONTHLY_SCAN')
+  const teamUsage = usage.find((u) => u.metric === 'TEAM_MEMBER')
+
+  const isTrialing = subscription?.status === 'TRIALING'
+
+  // Build a lookup for trial eligibility per plan
+  const trialMap = new Map(trialEligibility.map((t) => [t.planId, t]))
 
   return (
-    <div className="p-8 space-y-8 bg-slate-950 text-slate-50 min-h-screen">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Billing & Subscription</h1>
-        <p className="text-slate-400 text-sm mt-1">Manage your workspace subscription, Razorpay payments, and invoices.</p>
-      </div>
-
-      {/* Current Active Plan Card */}
-      <div className="p-8 rounded-2xl bg-gradient-to-r from-indigo-900/40 via-slate-900 to-slate-900 border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden shadow-xl">
-        <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Active Plan</span>
-          </div>
-          <h2 className="text-3xl font-extrabold text-white">Pro Plan</h2>
-          <p className="text-sm text-slate-400">Renews on August 1, 2026 via Razorpay Automatic Billing</p>
+    <div className="p-4 sm:p-6 md:p-8 space-y-8 sm:space-y-10 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
+      {/* Top Banner & Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Billing & Plans</h1>
+          <p className="text-slate-400 text-sm mt-1">
+            Manage your workspace plan, entitlements, capacity limits, and payment history.
+          </p>
         </div>
 
-        {/* Usage Gauges */}
-        <div className="flex flex-col sm:flex-row gap-6">
-          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 min-w-40">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Dynamic QRs</span>
-            <div className="text-xl font-bold text-white mt-1">38 / 100</div>
-            <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
-              <div className="bg-indigo-500 h-full rounded-full" style={{ width: '38%' }} />
+        <BillingCycleToggle cycle={cycle} onChange={setCycle} />
+      </div>
+
+      {actionError && (
+        <div className="flex items-center space-x-3 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span>{actionError}</span>
+        </div>
+      )}
+
+      {actionSuccess && (
+        <div className="flex items-center space-x-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-sm">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <span>{actionSuccess}</span>
+        </div>
+      )}
+
+      {/* Trial Countdown Banner */}
+      {isTrialing && subscription?.trialEnd && (
+        <TrialBanner
+          planName={currentPlan?.name || 'Trial'}
+          trialEnd={subscription.trialEnd}
+          onUpgrade={handleTrialUpgrade}
+        />
+      )}
+
+      {/* Current Active Plan Overview Card */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-8 backdrop-blur-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 pointer-events-none opacity-5">
+          <Sparkles className="w-64 h-64 text-indigo-400" />
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Current Workspace Plan</span>
+              <SubscriptionStatusBadge
+                status={subscription?.status || 'ACTIVE'}
+                cancelAtPeriodEnd={subscription?.cancelAtPeriodEnd}
+              />
             </div>
+
+            <div className="flex items-baseline space-x-3">
+              <h2 className="text-3xl font-black text-white">{currentPlan?.name || 'Free'}</h2>
+              {subscription?.amount ? (
+                <span className="text-sm font-semibold text-slate-400">
+                  ({formatPrice(subscription.amount, subscription.currency)}/{subscription.billingCycle?.toLowerCase()})
+                </span>
+              ) : null}
+            </div>
+
+            <p className="text-xs text-slate-400 max-w-lg">
+              {currentPlan?.description || 'Basic QR generation and analytics.'}
+              {isTrialing && subscription?.trialEnd ? (
+                <span className="block mt-1 text-indigo-400 font-medium">
+                  Trial ends on {new Date(subscription.trialEnd).toLocaleDateString()}
+                </span>
+              ) : subscription?.currentPeriodEnd ? (
+                <span className="block mt-1 text-slate-400">
+                  {subscription.cancelAtPeriodEnd
+                    ? `Access ends on ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}`
+                    : `Renews on ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}`}
+                </span>
+              ) : null}
+            </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 min-w-40">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Monthly Scans</span>
-            <div className="text-xl font-bold text-white mt-1">128.4K / Unlimited</div>
-            <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
-              <div className="bg-emerald-400 h-full rounded-full" style={{ width: '100%' }} />
-            </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {isTrialing ? (
+              <button
+                onClick={handleTrialUpgrade}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-lg shadow-indigo-600/30"
+              >
+                Upgrade to Paid Plan
+              </button>
+            ) : subscription?.cancelAtPeriodEnd ? (
+              <button
+                onClick={handleResumeSubscription}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-lg shadow-indigo-600/30"
+              >
+                Resume Subscription
+              </button>
+            ) : subscription && !currentPlan?.isFree ? (
+              <button
+                onClick={() => handleCancelSubscription(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/10 hover:text-rose-400 text-slate-300 font-semibold text-xs border border-slate-700 transition-all"
+              >
+                Cancel Subscription
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
 
-      {/* Subscription Tier Cards */}
-      <div>
-        <h2 className="text-xl font-bold text-white mb-4">Available Upgrade Tiers</h2>
+      {/* Real-time Usage & Quota Cards */}
+      <div className="space-y-4">
+        <h3 className="text-xl font-bold text-white">Usage & Quotas</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Starter */}
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-white">Starter</h3>
-              <p className="text-xs text-slate-400 mt-1">Essential tools for creators</p>
-              <div className="mt-4 flex items-baseline space-x-1">
-                <span className="text-3xl font-extrabold text-white">₹499</span>
-                <span className="text-slate-400 text-xs">/month</span>
-              </div>
-              <ul className="mt-6 space-y-2.5 text-xs text-slate-300">
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400 shrink-0" /> 20 Dynamic QR Codes</li>
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400 shrink-0" /> 50,000 Scans / month</li>
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400 shrink-0" /> Standard Geo Analytics</li>
-              </ul>
-            </div>
-            <button
-              onClick={() => handleUpgrade('Starter', 499)}
-              className="mt-6 w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-all"
-            >
-              Downgrade to Starter
-            </button>
-          </div>
-
-          {/* Pro */}
-          <div className="p-6 rounded-2xl bg-slate-900 border-2 border-indigo-500 relative flex flex-col justify-between shadow-lg shadow-indigo-500/10">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider">
-              Current Plan
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-white">Pro</h3>
-              <p className="text-xs text-slate-400 mt-1">For growing marketing teams</p>
-              <div className="mt-4 flex items-baseline space-x-1">
-                <span className="text-3xl font-extrabold text-white">₹1,499</span>
-                <span className="text-slate-400 text-xs">/month</span>
-              </div>
-              <ul className="mt-6 space-y-2.5 text-xs text-slate-300">
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400 shrink-0" /> 100 Dynamic QR Codes</li>
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400 shrink-0" /> Unlimited Scans</li>
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400 shrink-0" /> Advanced Heatmaps & UTM Builder</li>
-              </ul>
-            </div>
-            <button
-              disabled
-              className="mt-6 w-full py-2.5 rounded-xl bg-indigo-600/30 text-indigo-300 font-semibold text-xs cursor-default"
-            >
-              Current Active Plan
-            </button>
-          </div>
-
-          {/* Enterprise */}
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-white">Enterprise</h3>
-              <p className="text-xs text-slate-400 mt-1">Custom limits & SLA guarantees</p>
-              <div className="mt-4 flex items-baseline space-x-1">
-                <span className="text-3xl font-extrabold text-white">₹4,999</span>
-                <span className="text-slate-400 text-xs">/month</span>
-              </div>
-              <ul className="mt-6 space-y-2.5 text-xs text-slate-300">
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400 shrink-0" /> Unlimited QR Codes</li>
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400 shrink-0" /> Custom Domains & White-label</li>
-                <li className="flex items-center gap-2"><Check className="w-4 h-4 text-indigo-400 shrink-0" /> REST API & Webhooks Access</li>
-              </ul>
-            </div>
-            <button
-              onClick={() => handleUpgrade('Enterprise', 4999)}
-              className="mt-6 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/20"
-            >
-              Upgrade to Enterprise
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Coupon Code Section */}
-      <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 max-w-xl">
-        <h3 className="text-sm font-bold text-white mb-2">Have a Promo or Coupon Code?</h3>
-        <form onSubmit={handleApplyCoupon} className="flex gap-3">
-          <input
-            type="text"
-            value={couponCode}
-            onChange={(e) => setCouponCode(e.target.value)}
-            placeholder="Enter code (e.g. WELCOME20)"
-            className="flex-1 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase"
+          <UsageCard
+            title="Dynamic QR Codes"
+            usage={qrUsage?.usage || 0}
+            limit={qrUsage?.limit || 0}
+            isUnlimited={qrUsage?.isUnlimited}
+            unit="codes"
+            icon={<QrCode className="w-5 h-5" />}
           />
-          <button
-            type="submit"
-            className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-xl transition-all"
-          >
-            Apply Code
-          </button>
-        </form>
-        {couponMessage && <p className="text-xs mt-3">{couponMessage}</p>}
-      </div>
-
-      {/* Invoices Table */}
-      <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-6">
-        <h3 className="text-lg font-bold text-white mb-4">Payment History & Invoices</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="text-xs uppercase bg-slate-950/60 text-slate-400 border-b border-slate-800">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Invoice ID</th>
-                <th className="px-4 py-3 font-semibold">Date</th>
-                <th className="px-4 py-3 font-semibold">Description</th>
-                <th className="px-4 py-3 font-semibold">Amount</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold text-right">Receipt</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {mockInvoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-800/30">
-                  <td className="px-4 py-3.5 font-mono text-xs text-white">{inv.id}</td>
-                  <td className="px-4 py-3.5 text-xs text-slate-400">{inv.date}</td>
-                  <td className="px-4 py-3.5 text-xs text-white">{inv.plan}</td>
-                  <td className="px-4 py-3.5 font-semibold text-white">{inv.amount}</td>
-                  <td className="px-4 py-3.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      {inv.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    <a
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        alert(`Receipt for ${inv.id} downloaded.`)
-                      }}
-                      className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold inline-flex items-center gap-1"
-                    >
-                      <FileText className="w-3.5 h-3.5" /> Download
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <UsageCard
+            title="Monthly Scans"
+            usage={scanUsage?.usage || 0}
+            limit={scanUsage?.limit || 0}
+            isUnlimited={scanUsage?.isUnlimited}
+            unit="scans"
+            icon={<BarChart2 className="w-5 h-5" />}
+          />
+          <UsageCard
+            title="Team Members"
+            usage={teamUsage?.usage || 0}
+            limit={teamUsage?.limit || 0}
+            isUnlimited={teamUsage?.isUnlimited}
+            unit="members"
+            icon={<Users className="w-5 h-5" />}
+          />
         </div>
       </div>
+
+      {/* Available Plans Grid */}
+      <div id="available-plans" className="space-y-6">
+        <div>
+          <h3 className="text-xl font-bold text-white">Available Upgrade Plans</h3>
+          <p className="text-xs text-slate-400 mt-1">
+            Choose a plan that fits your business scale and feature needs.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {plans.map((p) => {
+            const eligibility = trialMap.get(p.id)
+            return (
+              <PlanCard
+                key={p.id}
+                plan={p}
+                currentCycle={cycle}
+                isCurrentPlan={p.id === currentPlan?.id}
+                canTrial={eligibility?.canTrial || false}
+                onSelect={handleSelectPlan}
+                onStartTrial={handleStartTrial}
+                isLoading={processingPlanId === p.id}
+              />
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Billing & Invoice History */}
+      <PaymentHistory payments={payments} invoices={invoices} />
     </div>
   )
 }

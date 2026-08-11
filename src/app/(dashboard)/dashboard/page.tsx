@@ -43,7 +43,7 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <div className="p-8 space-y-8 bg-slate-950 text-slate-50 min-h-screen">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

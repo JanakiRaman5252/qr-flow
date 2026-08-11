@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Folder, Tag, Plus, Trash2, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { Folder, Tag, Plus, Trash2, Loader2, Edit3, ArrowRight, Check, X } from 'lucide-react'
 
 interface FolderItem {
   id: string
@@ -27,6 +28,15 @@ export default function FoldersAndTagsPage() {
   const [newFolderColor, setNewFolderColor] = useState('#6366F1')
   const [newTagName, setNewTagName] = useState('')
   const [newTagColor, setNewTagColor] = useState('#EC4899')
+
+  // Edit states
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
+  const [editFolderName, setEditFolderName] = useState('')
+  const [editFolderColor, setEditFolderColor] = useState('#6366F1')
+
+  const [editingTagId, setEditingTagId] = useState<string | null>(null)
+  const [editTagName, setEditTagName] = useState('')
+  const [editTagColor, setEditTagColor] = useState('#EC4899')
 
   const fetchData = async () => {
     try {
@@ -92,8 +102,44 @@ export default function FoldersAndTagsPage() {
     }
   }
 
+  const handleUpdateFolder = async (id: string) => {
+    if (!editFolderName.trim()) return
+    try {
+      const res = await fetch('/api/folders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name: editFolderName, color: editFolderColor }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        setEditingFolderId(null)
+        fetchData()
+      }
+    } catch (err) {
+      console.error('Failed to update folder:', err)
+    }
+  }
+
+  const handleUpdateTag = async (id: string) => {
+    if (!editTagName.trim()) return
+    try {
+      const res = await fetch('/api/tags', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name: editTagName, color: editTagColor }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        setEditingTagId(null)
+        fetchData()
+      }
+    } catch (err) {
+      console.error('Failed to update tag:', err)
+    }
+  }
+
   const handleDeleteFolder = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this folder?')) return
+    if (!confirm('Are you sure you want to delete this folder? Existing QRs in this folder will become unassigned.')) return
     try {
       const res = await fetch(`/api/folders?id=${id}`, { method: 'DELETE' })
       const json = await res.json()
@@ -119,7 +165,7 @@ export default function FoldersAndTagsPage() {
   }
 
   return (
-    <div className="p-8 space-y-8 bg-slate-950 text-slate-50 min-h-screen">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Folders & Tags</h1>
         <p className="text-slate-400 text-sm mt-1">Organize your dynamic QR codes into folders and labeled tags.</p>
@@ -177,34 +223,89 @@ export default function FoldersAndTagsPage() {
                   No folders created yet.
                 </div>
               ) : (
-                folders.map((folder) => (
-                  <div
-                    key={folder.id}
-                    className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between gap-4"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className="p-3 rounded-xl shrink-0"
-                        style={{ backgroundColor: `${folder.color}15`, color: folder.color, borderColor: `${folder.color}30` }}
-                      >
-                        <Folder className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-semibold text-white truncate">{folder.name}</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">{folder.qrCount} QR codes · Created {folder.createdAt}</p>
-                      </div>
-                    </div>
+                folders.map((folder) => {
+                  const isEditing = editingFolderId === folder.id
+                  return (
+                    <div
+                      key={folder.id}
+                      className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all flex items-center justify-between gap-4"
+                    >
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="text"
+                            value={editFolderName}
+                            onChange={(e) => setEditFolderName(e.target.value)}
+                            className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none"
+                          />
+                          <input
+                            type="color"
+                            value={editFolderColor}
+                            onChange={(e) => setEditFolderColor(e.target.value)}
+                            className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                          />
+                          <button
+                            onClick={() => handleUpdateFolder(folder.id)}
+                            className="p-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setEditingFolderId(null)}
+                            className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div
+                              className="p-3 rounded-xl shrink-0"
+                              style={{ backgroundColor: `${folder.color}15`, color: folder.color, borderColor: `${folder.color}30` }}
+                            >
+                              <Folder className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="font-semibold text-white truncate">{folder.name}</h3>
+                              <p className="text-xs text-slate-500 mt-0.5">{folder.qrCount} QR codes · Created {folder.createdAt}</p>
+                            </div>
+                          </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleDeleteFolder(folder.id)}
-                        className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Link
+                              href={`/dashboard/qr?folderId=${folder.id}`}
+                              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 text-xs font-semibold flex items-center gap-1 transition-all"
+                            >
+                              <span>View QRs</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </Link>
+
+                            <button
+                              onClick={() => {
+                                setEditingFolderId(folder.id)
+                                setEditFolderName(folder.name)
+                                setEditFolderColor(folder.color || '#6366F1')
+                              }}
+                              className="p-2 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
+                              title="Edit Folder"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteFolder(folder.id)}
+                              className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                              title="Delete Folder"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>
@@ -254,26 +355,68 @@ export default function FoldersAndTagsPage() {
                 <p className="text-slate-500 text-sm">No tags created yet.</p>
               ) : (
                 <div className="flex flex-wrap gap-2.5">
-                  {tags.map((tag) => (
-                    <div
-                      key={tag.id}
-                      className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all"
-                      style={{
-                        backgroundColor: `${tag.color}15`,
-                        color: tag.color,
-                        borderColor: `${tag.color}35`,
-                      }}
-                    >
-                      <span>#{tag.name}</span>
-                      <span className="opacity-60 text-[10px] font-mono">({tag.qrCount})</span>
-                      <button
-                        onClick={() => handleDeleteTag(tag.id)}
-                        className="hover:opacity-100 opacity-60 transition-opacity ml-1"
+                  {tags.map((tag) => {
+                    const isEditing = editingTagId === tag.id
+                    if (isEditing) {
+                      return (
+                        <div key={tag.id} className="inline-flex items-center gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800">
+                          <input
+                            type="text"
+                            value={editTagName}
+                            onChange={(e) => setEditTagName(e.target.value)}
+                            className="px-2 py-0.5 bg-transparent text-xs text-white focus:outline-none w-24"
+                          />
+                          <input
+                            type="color"
+                            value={editTagColor}
+                            onChange={(e) => setEditTagColor(e.target.value)}
+                            className="w-5 h-5 rounded cursor-pointer bg-transparent border-0"
+                          />
+                          <button onClick={() => handleUpdateTag(tag.id)} className="p-1 text-emerald-400 hover:text-emerald-300">
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setEditingTagId(null)} className="p-1 text-slate-400 hover:text-white">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div
+                        key={tag.id}
+                        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all group"
+                        style={{
+                          backgroundColor: `${tag.color}15`,
+                          color: tag.color,
+                          borderColor: `${tag.color}35`,
+                        }}
                       >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                        <Link href={`/dashboard/qr?tagId=${tag.id}`} className="hover:underline">
+                          #{tag.name}
+                        </Link>
+                        <span className="opacity-60 text-[10px] font-mono">({tag.qrCount})</span>
+                        <button
+                          onClick={() => {
+                            setEditingTagId(tag.id)
+                            setEditTagName(tag.name)
+                            setEditTagColor(tag.color || '#EC4899')
+                          }}
+                          className="opacity-40 hover:opacity-100 transition-opacity ml-1"
+                          title="Edit Tag"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTag(tag.id)}
+                          className="hover:opacity-100 opacity-60 transition-opacity ml-0.5 text-red-400"
+                          title="Delete Tag"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -283,3 +426,4 @@ export default function FoldersAndTagsPage() {
     </div>
   )
 }
+

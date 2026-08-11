@@ -24,7 +24,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-8 space-y-8 bg-slate-950 text-slate-50 min-h-screen">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Account & Workspace Settings</h1>
         <p className="text-slate-400 text-sm mt-1">Manage profile details, 2FA security, custom domain verification, and account preferences.</p>

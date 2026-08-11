@@ -55,6 +55,33 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  try {
+    const { orgId } = await getCurrentUserAndOrg()
+    const { id, name, color } = await req.json()
+
+    if (!id || !name) {
+      return NextResponse.json({ error: 'Tag ID and name are required' }, { status: 400 })
+    }
+
+    const cleanName = name.replace(/\s+/g, '')
+
+    const updated = await db.tag.updateMany({
+      where: { id, organizationId: orgId },
+      data: { name: cleanName, color },
+    })
+
+    if (updated.count === 0) {
+      return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, message: 'Tag updated successfully' })
+  } catch (error) {
+    console.error('PATCH /api/tags Error:', error)
+    return NextResponse.json({ error: 'Failed to update tag' }, { status: 500 })
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   try {
     const { orgId } = await getCurrentUserAndOrg()
@@ -75,3 +102,4 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to delete tag' }, { status: 500 })
   }
 }
+

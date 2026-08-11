@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { redis } from '@/lib/redis'
+import { incrementScanCounter } from '@/lib/billing/usage'
+import { dispatchWebhookEvent } from '@/lib/webhooks'
 
 export async function GET(
   req: NextRequest,
@@ -12,7 +14,7 @@ export async function GET(
   try {
     // 1. Check Redis Cache for ultra-fast destination lookup
     const cachedTarget = await redis.get<string>(`qr:short:${shortCode}`)
-    
+
     if (cachedTarget) {
       // Record scan event and increment count synchronously before redirecting
       await recordScan(shortCode, req)
@@ -67,13 +69,16 @@ async function recordScan(shortCode: string, req: NextRequest) {
   try {
     const qr = await db.qRCode.findUnique({
       where: { shortCode },
-      select: { id: true },
+      select: { id: true, organizationId: true, title: true, type: true, destinationUrl: true },
     })
 
     if (!qr) return
 
     const ip = req.headers.get('x-forwarded-for') || '127.0.0.1'
     const userAgent = req.headers.get('user-agent') || ''
+    const country = req.headers.get('x-vercel-ip-country') || req.headers.get('cf-ipcountry') || 'Local'
+    const browser = parseUserAgentBrowser(userAgent)
+    const device = parseUserAgentDevice(userAgent)
 
     // Increment scanCount in database & log scan telemetry
     await Promise.all([
@@ -85,14 +90,30 @@ async function recordScan(shortCode: string, req: NextRequest) {
         data: {
           qrCodeId: qr.id,
           ipAddress: ip.split(',')[0].trim(),
-          browser: parseUserAgentBrowser(userAgent),
-          device: parseUserAgentDevice(userAgent),
-          country: req.headers.get('x-vercel-ip-country') || 'United States',
-          region: req.headers.get('x-vercel-ip-country-region') || 'NY',
-          city: req.headers.get('x-vercel-ip-city') || 'New York',
+          browser,
+          device,
+          country,
+          region: req.headers.get('x-vercel-ip-country-region') || req.headers.get('cf-region') || 'Local',
+          city: req.headers.get('x-vercel-ip-city') || req.headers.get('cf-ipcity') || 'Local',
         },
       }),
+      // ── Billing: increment tenant-level scan counter ──
+      incrementScanCounter(qr.organizationId, 1),
     ])
+
+    // Dispatch webhook event asynchronously
+    dispatchWebhookEvent(qr.organizationId, 'qr.scanned', {
+      qrCodeId: qr.id,
+      shortCode,
+      title: qr.title,
+      type: qr.type,
+      destinationUrl: qr.destinationUrl,
+      ip: ip.split(',')[0].trim(),
+      browser,
+      device,
+      country,
+      timestamp: new Date().toISOString(),
+    }).catch((err) => console.error('Webhook dispatch error:', err))
   } catch (error) {
     console.error('Error recording scan telemetry:', error)
   }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
+import { hasPermission } from '@/lib/rbac'
 
 export async function GET() {
   try {
@@ -30,7 +31,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, orgId } = await getCurrentUserAndOrg()
+    const { userId, orgId, role } = await getCurrentUserAndOrg()
+
+    if (!hasPermission(role, 'api_keys:manage')) {
+      return NextResponse.json({ error: 'Only Workspace Owners and Admins can create API keys' }, { status: 403 })
+    }
+
     const { name, scopes } = await req.json()
 
     if (!name) {
@@ -59,7 +65,12 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { orgId } = await getCurrentUserAndOrg()
+    const { orgId, role } = await getCurrentUserAndOrg()
+
+    if (!hasPermission(role, 'api_keys:manage')) {
+      return NextResponse.json({ error: 'Only Workspace Owners and Admins can revoke API keys' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
 

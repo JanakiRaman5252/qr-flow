@@ -1,11 +1,28 @@
-import { headers } from 'next/headers'
+import { headers, cookies } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
+import type { Role } from '@/lib/rbac'
 
-export async function getCurrentUserAndOrg() {
+export interface SessionUserAndOrg {
+  userId: string
+  user: any
+  orgId: string
+  organization: any
+  role: Role
+  memberId?: string
+}
+
+export async function getCurrentUserAndOrg(): Promise<SessionUserAndOrg> {
+  const reqHeaders = await headers()
+  const cookieStore = await cookies()
+
   const session = await auth.api.getSession({
-    headers: await headers(),
+    headers: reqHeaders,
   })
+
+  const activeOrgCookie = cookieStore.get('dynoqr_active_org_id')?.value
+  const activeOrgHeader = reqHeaders.get('x-organization-id')
+  const requestedOrgId = activeOrgHeader || activeOrgCookie
 
   let user = session?.user
 
@@ -27,10 +44,11 @@ export async function getCurrentUserAndOrg() {
       })
     }
 
-    let org = dbUser.memberships[0]?.organization
+    let memberships = dbUser.memberships || []
+    let member = memberships[0]
 
-    if (!org) {
-      org = await db.organization.create({
+    if (!member || !member.organization) {
+      const org = await db.organization.create({
         data: {
           name: 'Default Workspace',
           slug: `workspace-${Date.now()}`,
@@ -41,27 +59,47 @@ export async function getCurrentUserAndOrg() {
             },
           },
         },
+        include: { members: true },
       })
+      member = {
+        id: org.members[0]?.id || 'dev-member',
+        userId: dbUser.id,
+        organizationId: org.id,
+        role: 'OWNER',
+        organization: org,
+      } as any
+    }
+
+    // Check if user requested a specific workspace they belong to
+    if (requestedOrgId) {
+      const matched = memberships.find((m) => m.organizationId === requestedOrgId)
+      if (matched && matched.organization) {
+        member = matched
+      }
     }
 
     return {
       userId: dbUser.id,
       user: dbUser,
-      orgId: org.id,
-      organization: org,
+      orgId: member.organization.id,
+      organization: member.organization,
+      role: (member.role as Role) || 'OWNER',
+      memberId: member.id,
     }
   }
 
-  // Find user's organization
-  let member = await db.member.findFirst({
+  // Find all user's memberships
+  const memberships = await db.member.findMany({
     where: { userId: user.id },
     include: { organization: true },
+    orderBy: { createdAt: 'asc' },
   })
 
-  if (!member) {
+  // If user has no workspace yet, create a default one
+  if (memberships.length === 0) {
     const org = await db.organization.create({
       data: {
-        name: `${user.name || 'User'}'s Workspace`,
+        name: `${user.name || 'My'}'s Workspace`,
         slug: `workspace-${Date.now()}`,
         members: {
           create: {
@@ -70,9 +108,34 @@ export async function getCurrentUserAndOrg() {
           },
         },
       },
+      include: { members: true },
     })
-    return { userId: user.id, user, orgId: org.id, organization: org }
+
+    return {
+      userId: user.id,
+      user,
+      orgId: org.id,
+      organization: org,
+      role: 'OWNER',
+      memberId: org.members[0]?.id,
+    }
   }
 
-  return { userId: user.id, user, orgId: member.organization.id, organization: member.organization }
+  // Pick requested organization if valid membership exists, otherwise fallback to first
+  let selectedMember = memberships[0]
+  if (requestedOrgId) {
+    const matched = memberships.find((m) => m.organizationId === requestedOrgId)
+    if (matched) {
+      selectedMember = matched
+    }
+  }
+
+  return {
+    userId: user.id,
+    user,
+    orgId: selectedMember.organization.id,
+    organization: selectedMember.organization,
+    role: (selectedMember.role as Role) || 'MEMBER',
+    memberId: selectedMember.id,
+  }
 }

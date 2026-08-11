@@ -14,104 +14,122 @@ AlertCircle,
 import { authClient } from '@/lib/auth-client'
 
 export default function LoginForm() {
-const router = useRouter()
-const searchParams = useSearchParams()
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+  const isInvited = searchParams.get('invited') === 'true'
+  const queryEmail = searchParams.get('email') || ''
 
-const [email, setEmail] = useState('')
-const [password, setPassword] = useState('')
-const [isLoading, setIsLoading] = useState(false)
-const [error, setError] = useState('')
+  const [email, setEmail] = useState(queryEmail)
+  const [password, setPassword] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
-  setIsLoading(true)
-  setError('')
+    setIsLoading(true)
+    setError('')
 
-  const result = await authClient.signIn.email({
-    email,
-    password,
-  })
+    const result = await authClient.signIn.email({
+      email,
+      password,
+    })
 
-  if (result.error) {
-    setError(
-      result.error.message ||
-        'Invalid credentials. Please try again.'
-    )
-    setIsLoading(false)
-    return
+    if (result.error) {
+      setError(
+        result.error.message ||
+          'Invalid credentials. Please try again.'
+      )
+      setIsLoading(false)
+      return
+    }
+
+    router.push(callbackUrl)
+    router.refresh()
   }
 
-  router.push(callbackUrl)
-  router.refresh()
-}
+  const handleGoogleSignIn = async () => {
+    await authClient.signIn.social({
+      provider: 'google',
+      callbackURL: callbackUrl,
+    })
+  }
 
-const handleGoogleSignIn = async () => {
-  await authClient.signIn.social({
-    provider: 'google',
-    callbackURL: callbackUrl,
-  })
-}
+  const handleGithubSignIn = async () => {
+    await authClient.signIn.social({
+      provider: 'github',
+      callbackURL: callbackUrl,
+    })
+  }
 
-const handleGithubSignIn = async () => {
-  await authClient.signIn.social({
-    provider: 'github',
-    callbackURL: callbackUrl,
-  })
-}
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-950 to-slate-950" />
 
-return (
-  <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-    <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-950 to-slate-950" />
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+        <Link href="/" className="inline-flex items-center space-x-2">
+          <div className="p-2 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/25">
+            <QrCode className="w-6 h-6" />
+          </div>
 
-    <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-      <Link href="/" className="inline-flex items-center space-x-2">
-        <div className="p-2 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/25">
-          <QrCode className="w-6 h-6" />
-        </div>
-
-        <span className="font-bold text-2xl tracking-tight text-white">
-          QRFlow
-        </span>
-      </Link>
-
-      <h2 className="mt-6 text-3xl font-extrabold text-white tracking-tight">
-        Welcome back
-      </h2>
-
-      <p className="mt-2 text-sm text-slate-400">
-        No account?{' '}
-        <Link
-          href="/signup"
-          className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
-        >
-          Create one free
+          <span className="font-bold text-2xl tracking-tight text-white">
+            QRFlow
+          </span>
         </Link>
-      </p>
-    </div>
 
-    <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
-      <div className="bg-slate-900/80 backdrop-blur-xl py-8 px-6 shadow-2xl border border-slate-800 rounded-2xl sm:px-10">
+        <h2 className="mt-6 text-3xl font-extrabold text-white tracking-tight">
+          {isInvited ? 'Join Workspace' : 'Welcome back'}
+        </h2>
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            className="w-full inline-flex justify-center items-center gap-2 py-2.5 px-4 rounded-xl border border-slate-800 bg-slate-950 text-sm font-medium text-slate-300 hover:bg-slate-800 transition-all"
+        <p className="mt-2 text-sm text-slate-400">
+          No account?{' '}
+          <Link
+            href="/signup"
+            className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
           >
-            Google
-          </button>
+            Create one free
+          </Link>
+        </p>
+      </div>
 
-          <button
-            type="button"
-            onClick={handleGithubSignIn}
-            className="w-full inline-flex justify-center items-center gap-2 py-2.5 px-4 rounded-xl border border-slate-800 bg-slate-950 text-sm font-medium text-slate-300 hover:bg-slate-800 transition-all"
-          >
-            GitHub
-          </button>
-        </div>
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
+        <div className="bg-slate-900/80 backdrop-blur-xl py-8 px-6 shadow-2xl border border-slate-800 rounded-2xl sm:px-10 space-y-6">
+
+          {isInvited && (
+            <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-start space-x-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-indigo-400" />
+              <div>
+                <span className="font-bold block">Invited to a team?</span>
+                <span>If you don't have a password yet, </span>
+                <Link
+                  href={`/accept-invite?${searchParams.toString()}`}
+                  className="font-bold underline text-white hover:text-indigo-200"
+                >
+                  click here to set your password and activate your account.
+                </Link>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              className="w-full inline-flex justify-center items-center gap-2 py-2.5 px-4 rounded-xl border border-slate-800 bg-slate-950 text-sm font-medium text-slate-300 hover:bg-slate-800 transition-all"
+            >
+              Google
+            </button>
+
+            <button
+              type="button"
+              onClick={handleGithubSignIn}
+              className="w-full inline-flex justify-center items-center gap-2 py-2.5 px-4 rounded-xl border border-slate-800 bg-slate-950 text-sm font-medium text-slate-300 hover:bg-slate-800 transition-all"
+            >
+              GitHub
+            </button>
+          </div>
 
         <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center">
