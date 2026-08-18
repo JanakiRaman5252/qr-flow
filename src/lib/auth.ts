@@ -13,16 +13,23 @@ if (!authSecret || authSecret.length < 32) {
   )
 }
 
-// ── Build trusted origins from env only ──
-const trustedOrigins = [process.env.NEXT_PUBLIC_APP_URL].filter(
-  (origin): origin is string => Boolean(origin)
-)
+// ── Build trusted origins & baseURL ──
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.BETTER_AUTH_URL || 'http://localhost:3000'
+
+const trustedOrigins = [
+  'http://localhost:3000',
+  'https://dynoqr.in',
+  'https://www.dynoqr.in',
+  'https://qr-flow-rouge.vercel.app',
+  process.env.NEXT_PUBLIC_APP_URL,
+].filter((origin): origin is string => Boolean(origin))
 
 export const auth = betterAuth({
   database: prismaAdapter(db, {
     provider: 'postgresql',
   }),
   secret: authSecret,
+  baseURL: appUrl,
   trustedOrigins,
   emailAndPassword: {
     enabled: true,
@@ -37,7 +44,7 @@ export const auth = betterAuth({
       console.log(`[VERIFICATION LINK] ${url}`)
       console.log(`========================================\n`)
 
-      await sendEmail({
+      const emailResult = await sendEmail({
         to: user.email,
         subject: 'Verify your email address - QRFlow',
         html: `
@@ -56,6 +63,11 @@ export const auth = betterAuth({
           </div>
         `,
       })
+
+      if (!emailResult.success) {
+        console.error('[sendEmail Error]:', emailResult.error)
+        throw new Error(emailResult.error || 'Failed to deliver verification email')
+      }
     },
   },
   socialProviders: {
