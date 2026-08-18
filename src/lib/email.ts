@@ -19,8 +19,8 @@ export async function sendEmail({
   // Use configured EMAIL_FROM or default to Resend onboarding address
   let fromAddress = process.env.EMAIL_FROM || 'QRFlow <onboarding@resend.dev>'
   
-  // If set to unverified domain notifications@qrflow.io in development, fallback to onboarding@resend.dev
-  if (fromAddress.includes('@qrflow.io') && process.env.NODE_ENV !== 'production') {
+  // Resend requires custom domain verification. Fallback .vercel.app or .io to onboarding@resend.dev unless explicitly verified
+  if (fromAddress.includes('.vercel.app') || (fromAddress.includes('@qrflow.io') && process.env.NODE_ENV !== 'production')) {
     fromAddress = 'QRFlow <onboarding@resend.dev>'
   }
 
