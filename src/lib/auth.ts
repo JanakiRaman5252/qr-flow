@@ -38,10 +38,13 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
-    async sendVerificationEmail({ user, url }) {
+    async sendVerificationEmail({ user, url, token }) {
+      // Use clean frontend verification route instead of raw API endpoint to prevent security filter flagging
+      const cleanUrl = `${appUrl}/verify-email?token=${token}&callbackURL=${encodeURIComponent('/dashboard')}`
+
       console.log(`\n========================================`)
       console.log(`[VERIFICATION EMAIL SENT] To: ${user.email}`)
-      console.log(`[VERIFICATION LINK] ${url}`)
+      console.log(`[VERIFICATION LINK] ${cleanUrl}`)
       console.log(`========================================\n`)
 
       // Dispatch sendEmail asynchronously so the API route returns instantly (no 500 timeouts)
@@ -55,10 +58,10 @@ export const auth = betterAuth({
               <p style="font-size: 14px; color: #94a3b8; margin: 0;">Hi ${user.name || 'there'}, thanks for signing up! Please verify your email address to get started.</p>
             </div>
             <div style="margin: 32px 0;">
-              <a href="${url}" target="_blank" style="display: inline-block; background-color: #6366f1; color: #ffffff; font-weight: 600; font-size: 14px; padding: 12px 28px; border-radius: 12px; text-decoration: none;">Verify Email Address</a>
+              <a href="${cleanUrl}" target="_blank" style="display: inline-block; background-color: #6366f1; color: #ffffff; font-weight: 600; font-size: 14px; padding: 12px 28px; border-radius: 12px; text-decoration: none;">Verify Email Address</a>
             </div>
             <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">If the button above doesn't work, copy and paste this link into your web browser:</p>
-            <p style="font-size: 12px; color: #818cf8; word-break: break-all; margin: 0;">${url}</p>
+            <p style="font-size: 12px; color: #818cf8; word-break: break-all; margin: 0;">${cleanUrl}</p>
             <hr style="border: 0; border-top: 1px solid #1e293b; margin: 32px 0 16px 0;" />
             <p style="font-size: 11px; color: #475569; margin: 0;">If you didn't create an account on QRFlow, no action is needed.</p>
           </div>
