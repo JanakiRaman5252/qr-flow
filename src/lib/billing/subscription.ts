@@ -25,16 +25,18 @@ export async function getActiveSubscription(tenantId: string) {
   })
 }
 
-// ── Create Free Subscription ────────────────
+// ── Create Auto Trial Subscription ──────────
 
-/** Auto-assign the FREE plan to a tenant */
-export async function createFreeSubscription(tenantId: string): Promise<Subscription> {
-  const freePlan = await db.plan.findFirst({
-    where: { isFree: true, isActive: true },
+/** Auto-assign a 7-day trial on the default plan (Starter) for new tenants */
+export async function createTrialSubscription(tenantId: string): Promise<Subscription> {
+  // Find the default trial plan (lowest-priced active paid plan)
+  const trialPlan = await db.plan.findFirst({
+    where: { isActive: true, isFree: false, trialDays: { gt: 0 } },
+    orderBy: { sortOrder: 'asc' },
   })
 
-  if (!freePlan) {
-    throw new Error('No active free plan found. Run the billing seed script.')
+  if (!trialPlan) {
+    throw new Error('No active trial-eligible plan found. Run the billing seed script.')
   }
 
   const existing = await db.subscription.findUnique({
@@ -42,33 +44,40 @@ export async function createFreeSubscription(tenantId: string): Promise<Subscrip
   })
 
   if (existing) {
-    logger.info({ tenantId }, 'Subscription already exists, skipping free plan creation')
+    logger.info({ tenantId }, 'Subscription already exists, skipping trial creation')
     return existing
   }
+
+  const now = new Date()
+  const trialEnd = new Date(now)
+  trialEnd.setDate(trialEnd.getDate() + (trialPlan.trialDays || 7))
 
   const sub = await db.$transaction(async (tx) => {
     const subscription = await tx.subscription.create({
       data: {
         organizationId: tenantId,
-        planId: freePlan.id,
-        status: 'ACTIVE',
-        currency: freePlan.currency,
-        currentPeriodStart: new Date(),
+        planId: trialPlan.id,
+        status: 'TRIALING',
+        trialStart: now,
+        trialEnd,
+        currency: trialPlan.currency,
+        currentPeriodStart: now,
+        currentPeriodEnd: trialEnd,
       },
     })
 
     await tx.subscriptionEvent.create({
       data: {
         subscriptionId: subscription.id,
-        eventType: BILLING_EVENTS.SUBSCRIPTION_CREATED,
-        newState: { plan: freePlan.slug, status: 'ACTIVE' },
+        eventType: BILLING_EVENTS.TRIAL_STARTED,
+        newState: { plan: trialPlan.slug, status: 'TRIALING', trialEnd: trialEnd.toISOString() },
       },
     })
 
     return subscription
   })
 
-  logger.info({ tenantId, planId: freePlan.id }, 'Free subscription created')
+  logger.info({ tenantId, planId: trialPlan.id, trialEnd }, '7-day trial subscription created')
   return sub
 }
 
@@ -550,11 +559,11 @@ export async function startTrial(
     include: { plan: true },
   })
 
-  if (existing && !existing.plan?.isFree && ['ACTIVE', 'TRIALING'].includes(existing.status)) {
+  if (existing && ['ACTIVE', 'TRIALING'].includes(existing.status)) {
     const { TrialNotAvailableError } = await import('./billing-errors')
     throw new TrialNotAvailableError(
       existing.status === 'TRIALING'
-        ? 'You are already on a trial. Upgrade or wait for it to end.'
+        ? 'You are already on a trial. Please upgrade to continue after it expires.'
         : 'You already have an active paid subscription.'
     )
   }

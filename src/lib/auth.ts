@@ -2,22 +2,61 @@ import { betterAuth } from 'better-auth'
 import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { db } from './db'
 
+import { sendEmail } from './email'
+
+// ── Fail fast if auth secret is missing or too weak ──
+const authSecret = process.env.BETTER_AUTH_SECRET
+if (!authSecret || authSecret.length < 32) {
+  throw new Error(
+    'FATAL: BETTER_AUTH_SECRET must be set and at least 32 characters. ' +
+    'Generate one with: openssl rand -hex 32'
+  )
+}
+
+// ── Build trusted origins from env only ──
+const trustedOrigins = [process.env.NEXT_PUBLIC_APP_URL].filter(
+  (origin): origin is string => Boolean(origin)
+)
+
 export const auth = betterAuth({
   database: prismaAdapter(db, {
     provider: 'postgresql',
   }),
-  secret: process.env.BETTER_AUTH_SECRET || 'fallback-secret-for-development-mode-123456',
-  trustedOrigins: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',
-    process.env.NEXT_PUBLIC_APP_URL || '',
-  ].filter(Boolean),
+  secret: authSecret,
+  trustedOrigins,
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: false,
+    requireEmailVerification: true,
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    async sendVerificationEmail({ user, url }) {
+      console.log(`\n========================================`)
+      console.log(`[VERIFICATION EMAIL SENT] To: ${user.email}`)
+      console.log(`[VERIFICATION LINK] ${url}`)
+      console.log(`========================================\n`)
+
+      await sendEmail({
+        to: user.email,
+        subject: 'Verify your email address - QRFlow',
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; background-color: #0f172a; border-radius: 16px; border: 1px solid #1e293b; color: #f8fafc;">
+            <div style="margin-bottom: 24px;">
+              <h1 style="font-size: 24px; font-weight: 800; color: #ffffff; margin: 0 0 8px 0;">Verify your QRFlow account</h1>
+              <p style="font-size: 14px; color: #94a3b8; margin: 0;">Hi ${user.name || 'there'}, thanks for signing up! Please verify your email address to get started.</p>
+            </div>
+            <div style="margin: 32px 0;">
+              <a href="${url}" target="_blank" style="display: inline-block; background-color: #6366f1; color: #ffffff; font-weight: 600; font-size: 14px; padding: 12px 28px; border-radius: 12px; text-decoration: none;">Verify Email Address</a>
+            </div>
+            <p style="font-size: 12px; color: #64748b; margin-bottom: 8px;">If the button above doesn't work, copy and paste this link into your web browser:</p>
+            <p style="font-size: 12px; color: #818cf8; word-break: break-all; margin: 0;">${url}</p>
+            <hr style="border: 0; border-top: 1px solid #1e293b; margin: 32px 0 16px 0;" />
+            <p style="font-size: 11px; color: #475569; margin: 0;">If you didn't create an account on QRFlow, no action is needed.</p>
+          </div>
+        `,
+      })
+    },
   },
   socialProviders: {
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET

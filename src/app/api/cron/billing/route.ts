@@ -4,15 +4,23 @@ import { flushScanCountersToDB } from '@/lib/billing/usage'
 import { logger } from '@/lib/logger'
 
 export async function GET(req: NextRequest) {
-  // Protect cron route via CRON_SECRET header or query parameter
-  const authHeader = req.headers.get('authorization')
+  // ── Cron Authentication: Fail closed ──
   const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret || cronSecret.length < 16) {
+    logger.error('CRON_SECRET is not configured or too weak — rejecting cron execution')
+    return NextResponse.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Cron secret not configured' } },
+      { status: 403 }
+    )
+  }
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    const urlSecret = new URL(req.url).searchParams.get('secret')
-    if (urlSecret !== cronSecret) {
-      return NextResponse.json({ error: 'Unauthorized cron execution' }, { status: 401 })
-    }
+  // Only accept Bearer token via Authorization header (no query param fallback)
+  const authHeader = req.headers.get('authorization')
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json(
+      { success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid cron authorization' } },
+      { status: 401 }
+    )
   }
 
   try {
@@ -40,6 +48,9 @@ export async function GET(req: NextRequest) {
     })
   } catch (error: any) {
     logger.error({ error }, 'Cron billing execution failed')
-    return NextResponse.json({ error: error.message || 'Cron failed' }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Cron execution failed' } },
+      { status: 500 }
+    )
   }
 }

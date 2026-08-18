@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
+import { handleApiError } from '@/lib/errors'
 
 export async function GET(req: NextRequest) {
   try {
     const { orgId } = await getCurrentUserAndOrg()
 
-    // Count total active QRs
-    const activeQRsCount = await db.qRCode.count({
-      where: { organizationId: orgId, isInTrash: false, isArchived: false },
-    })
-
-    // Count total dynamic QRs vs static QRs
-    const dynamicQRsCount = await db.qRCode.count({
-      where: { organizationId: orgId, type: { not: 'TEXT' } },
-    })
-
-    // Get all QR IDs for this org
+    // Get all QR IDs for this org (needed for scan queries)
     const qrIds = (
       await db.qRCode.findMany({
         where: { organizationId: orgId },
@@ -24,33 +15,38 @@ export async function GET(req: NextRequest) {
       })
     ).map((q) => q.id)
 
-    // Aggregate total scans
-    const totalScans = await db.scanEvent.count({
-      where: { qrCodeId: { in: qrIds } },
-    })
-
-    // Count unique visitors
-    const uniqueVisitors = await db.scanEvent.count({
-      where: { qrCodeId: { in: qrIds }, isUnique: true },
-    })
-
-    // Find top country
-    const topCountryResult = await db.scanEvent.groupBy({
-      by: ['country'],
-      where: { qrCodeId: { in: qrIds } },
-      _count: { country: true },
-      orderBy: { _count: { country: 'desc' } },
-      take: 1,
-    })
+    // Run all independent queries in parallel
+    const [activeQRsCount, dynamicQRsCount, totalScans, uniqueVisitors, topCountryResult, recentQRs] =
+      await Promise.all([
+        db.qRCode.count({
+          where: { organizationId: orgId, isInTrash: false, isArchived: false },
+        }),
+        db.qRCode.count({
+          where: { organizationId: orgId, type: { not: 'TEXT' } },
+        }),
+        qrIds.length > 0
+          ? db.scanEvent.count({ where: { qrCodeId: { in: qrIds } } })
+          : Promise.resolve(0),
+        qrIds.length > 0
+          ? db.scanEvent.count({ where: { qrCodeId: { in: qrIds }, isUnique: true } })
+          : Promise.resolve(0),
+        qrIds.length > 0
+          ? db.scanEvent.groupBy({
+              by: ['country'],
+              where: { qrCodeId: { in: qrIds } },
+              _count: { country: true },
+              orderBy: { _count: { country: 'desc' } },
+              take: 1,
+            })
+          : Promise.resolve([]),
+        db.qRCode.findMany({
+          where: { organizationId: orgId },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        }),
+      ])
 
     const topCountry = topCountryResult[0]?.country || 'No Scans Yet'
-
-    // Fetch recent 5 QR codes
-    const recentQRs = await db.qRCode.findMany({
-      where: { organizationId: orgId },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    })
 
     return NextResponse.json({
       success: true,
@@ -64,7 +60,6 @@ export async function GET(req: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('GET /api/dashboard/stats Error:', error)
-    return NextResponse.json({ error: 'Failed to aggregate statistics' }, { status: 500 })
+    return handleApiError(error)
   }
 }

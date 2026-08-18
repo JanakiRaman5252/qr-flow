@@ -78,7 +78,7 @@ export default function DashboardPage() {
                 <span className="text-xs font-semibold uppercase tracking-wider">Total Scans</span>
                 <BarChart2 className="w-4 h-4 text-indigo-400" />
               </div>
-              <p className="text-3xl font-extrabold text-white mt-3">{stats?.totalScans.toLocaleString() || 0}</p>
+              <p className="text-3xl font-extrabold text-white mt-3">{(stats?.totalScans ?? 0).toLocaleString('en-US')}</p>
               <div className="flex items-center space-x-1.5 mt-2 text-xs font-medium text-emerald-400">
                 <TrendingUp className="w-3.5 h-3.5" />
                 <span>Live Database Analytics</span>
@@ -101,7 +101,7 @@ export default function DashboardPage() {
                 <span className="text-xs font-semibold uppercase tracking-wider">Unique Visitors</span>
                 <Eye className="w-4 h-4 text-pink-400" />
               </div>
-              <p className="text-3xl font-extrabold text-white mt-3">{stats?.uniqueVisitors.toLocaleString() || 0}</p>
+              <p className="text-3xl font-extrabold text-white mt-3">{(stats?.uniqueVisitors ?? 0).toLocaleString('en-US')}</p>
               <div className="flex items-center space-x-1.5 mt-2 text-xs font-medium text-emerald-400">
                 <TrendingUp className="w-3.5 h-3.5" />
                 <span>Real-Time Edge Capture</span>

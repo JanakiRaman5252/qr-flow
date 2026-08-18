@@ -31,7 +31,7 @@ export default function LandingPage() {
               href="/signup"
               className="text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md shadow-indigo-600/30 hover:shadow-indigo-500/40"
             >
-              Get Started Free
+              Start 7-Day Trial
             </Link>
           </div>
         </div>
@@ -62,7 +62,7 @@ export default function LandingPage() {
               href="/signup"
               className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-600/30 transition-all text-base"
             >
-              <span>Start Free Trial</span>
+              <span>Start Your Free Trial</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
             <a
@@ -155,28 +155,30 @@ export default function LandingPage() {
           <div className="text-center max-w-3xl mx-auto">
             <h2 className="text-3xl md:text-5xl font-extrabold text-white">Simple, Transparent Pricing</h2>
             <p className="mt-4 text-slate-400 text-lg">
-              Start free, upgrade as your team and QR scan volume grows. Powered by Razorpay.
+              Try any plan free for 7 days. No credit card required. Powered by Razorpay.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
-            {/* Free */}
+            {/* Starter */}
             <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between">
               <div>
-                <h3 className="text-xl font-bold text-white">Free</h3>
-                <p className="text-slate-400 text-sm mt-1">Perfect for individuals starting out</p>
+                <h3 className="text-xl font-bold text-white">Starter</h3>
+                <p className="text-slate-400 text-sm mt-1">Essential tools for creators & small businesses</p>
                 <div className="mt-6 flex items-baseline space-x-1">
-                  <span className="text-4xl font-extrabold text-white">₹0</span>
+                  <span className="text-4xl font-extrabold text-white">₹499</span>
                   <span className="text-slate-400 text-sm">/month</span>
                 </div>
+                <p className="mt-2 text-xs text-emerald-400 font-semibold">7-day free trial</p>
                 <ul className="mt-8 space-y-3 text-sm text-slate-300">
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> 5 Dynamic QR Codes</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> 1,000 Scans / mo</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> Basic Device & Geo Analytics</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> 50 Dynamic QR Codes</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> 25,000 Scans / mo</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> Advanced Analytics</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> Custom Branding</li>
                 </ul>
               </div>
               <Link href="/signup" className="mt-8 w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-center transition-all">
-                Get Started
+                Start Free Trial
               </Link>
             </div>
 

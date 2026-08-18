@@ -4,6 +4,8 @@ import { getCurrentUserAndOrg } from '@/lib/get-session-user'
 import { cancelSubscription } from '@/lib/billing/subscription'
 import { cancelRazorpaySubscription } from '@/lib/billing/razorpay'
 import { db } from '@/lib/db'
+import { hasPermission } from '@/lib/rbac'
+import { handleApiError } from '@/lib/errors'
 import { z } from 'zod'
 
 const cancelSchema = z.object({
@@ -12,12 +14,23 @@ const cancelSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, orgId } = await getCurrentUserAndOrg()
+    const { userId, orgId, role } = await getCurrentUserAndOrg()
+
+    if (!hasPermission(role, 'billing:manage')) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only Owners and Admins can cancel subscriptions' } },
+        { status: 403 }
+      )
+    }
+
     const body = await req.json()
     const parsed = cancelSchema.safeParse(body)
 
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid request' } },
+        { status: 400 }
+      )
     }
 
     const sub = await db.subscription.findUnique({ where: { organizationId: orgId } })
@@ -48,7 +61,6 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('POST /api/billing/cancel Error:', error)
-    return NextResponse.json({ error: 'Failed to cancel subscription' }, { status: 500 })
+    return handleApiError(error)
   }
 }

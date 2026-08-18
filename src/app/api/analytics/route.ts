@@ -2,10 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
 import { hasFeature } from '@/lib/billing/entitlements'
+import { hasPermission } from '@/lib/rbac'
+import { handleApiError } from '@/lib/errors'
 
 export async function GET(req: NextRequest) {
   try {
-    const { orgId } = await getCurrentUserAndOrg()
+    const { orgId, role } = await getCurrentUserAndOrg()
+
+    // RBAC check
+    if (!hasPermission(role, 'analytics:read')) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'You do not have permission to view analytics' } },
+        { status: 403 }
+      )
+    }
     const { searchParams } = new URL(req.url)
     const timeframe = searchParams.get('timeframe') || '7d'
 
@@ -199,7 +209,6 @@ export async function GET(req: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('GET /api/analytics Error:', error)
-    return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 })
+    return handleApiError(error)
   }
 }

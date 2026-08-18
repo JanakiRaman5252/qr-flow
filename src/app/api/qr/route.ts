@@ -6,7 +6,11 @@ import { requireCapacity } from '@/lib/billing/usage'
 import { BillingError, billingErrorToResponse } from '@/lib/billing/billing-errors'
 import { dispatchWebhookEvent } from '@/lib/webhooks'
 import { hasPermission } from '@/lib/rbac'
+import { handleApiError, AuthenticationError } from '@/lib/errors'
+import { validateDestinationUrl, generateShortCode, validatePagination } from '@/lib/validation'
+import { Prisma } from '@prisma/client'
 
+// ── GET /api/qr — List QR codes with pagination ──
 export async function GET(req: NextRequest) {
   try {
     const { orgId } = await getCurrentUserAndOrg()
@@ -14,6 +18,12 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search') || ''
     const folderId = searchParams.get('folderId') || ''
     const tagId = searchParams.get('tagId') || ''
+
+    // Pagination
+    const { page, limit, skip } = validatePagination(
+      searchParams.get('page'),
+      searchParams.get('limit')
+    )
 
     const whereClause: any = {
       organizationId: orgId,
@@ -44,33 +54,51 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const qrCodes = await db.qRCode.findMany({
-      where: whereClause,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        folder: true,
-        tags: { include: { tag: true } },
+    // Execute count and data queries in parallel
+    const [total, qrCodes] = await Promise.all([
+      db.qRCode.count({ where: whereClause }),
+      db.qRCode.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          folder: true,
+          tags: { include: { tag: true } },
+        },
+      }),
+    ])
+
+    return NextResponse.json({
+      success: true,
+      data: qrCodes,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     })
-
-    return NextResponse.json({ success: true, data: qrCodes })
   } catch (error) {
-    console.error('GET /api/qr Error:', error)
-    return NextResponse.json({ error: 'Failed to fetch QR codes' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
+// ── POST /api/qr — Create QR code ──
 export async function POST(req: NextRequest) {
   try {
     const { userId, orgId, role } = await getCurrentUserAndOrg()
 
     // ── RBAC Check ──
     if (!hasPermission(role, 'qr:create')) {
-      return NextResponse.json({ error: 'Viewers have read-only access and cannot create QR codes' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Viewers have read-only access and cannot create QR codes' } },
+        { status: 403 }
+      )
     }
 
     // ── Billing: check QR code limit ──
-    await requireCapacity(orgId, 'QR_CODE', 1, 'pro')
+    await requireCapacity(orgId, 'QR_CODE', 1)
 
     const body = await req.json()
 
@@ -82,6 +110,11 @@ export async function POST(req: NextRequest) {
       bgColor,
       logoUrl,
       description,
+      dotsStyle,
+      cornerDotsStyle,
+      frameTemplate,
+      frameText,
+      designConfig,
       expiresAt,
       startsAt,
       maxScans,
@@ -89,47 +122,90 @@ export async function POST(req: NextRequest) {
       tagIds,
     } = body
 
-    if (!title || !destinationUrl) {
-      return NextResponse.json({ error: 'Title and Destination URL are required' }, { status: 400 })
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Title is required' } },
+        { status: 400 }
+      )
     }
 
-    // Generate unique random 7-character shortCode
-    const shortCode = Math.random().toString(36).substring(2, 9)
+    if (!destinationUrl) {
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Destination URL is required' } },
+        { status: 400 }
+      )
+    }
 
-    const tagCreateData = Array.isArray(tagIds) && tagIds.length > 0
-      ? {
-          tags: {
-            create: tagIds.map((tId: string) => ({ tagId: tId })),
+    // Validate URL scheme (reject javascript:, data:, etc.)
+    const validatedUrl = validateDestinationUrl(destinationUrl)
+
+    // Generate cryptographically secure shortCode with collision retry
+    const MAX_RETRIES = 3
+    let qr: any = null
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const shortCode = generateShortCode()
+
+      const tagCreateData = Array.isArray(tagIds) && tagIds.length > 0
+        ? {
+            tags: {
+              create: tagIds.map((tId: string) => ({ tagId: tId })),
+            },
+          }
+        : {}
+
+      try {
+        qr = await db.qRCode.create({
+          data: {
+            title: title.trim(),
+            type: type || 'WEBSITE',
+            shortCode,
+            destinationUrl: validatedUrl,
+            fgColor: fgColor || '#000000',
+            bgColor: bgColor || '#FFFFFF',
+            logoUrl: logoUrl || null,
+            dotsStyle: dotsStyle || 'square',
+            cornerDotsStyle: cornerDotsStyle || 'square',
+            frameTemplate: frameTemplate || null,
+            frameText: frameText || null,
+            redirectRules: designConfig ? designConfig : undefined,
+            description,
+            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            startsAt: startsAt ? new Date(startsAt) : null,
+            maxScans: maxScans ? parseInt(maxScans, 10) : null,
+            folderId: folderId || null,
+            organizationId: orgId,
+            creatorId: userId,
+            ...tagCreateData,
           },
+          include: {
+            folder: true,
+            tags: { include: { tag: true } },
+          },
+        })
+        break // success
+      } catch (err: any) {
+        // P2002 = unique constraint violation (shortCode collision)
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          if (attempt === MAX_RETRIES - 1) {
+            throw new Error('Failed to generate unique shortCode after multiple attempts')
+          }
+          continue // retry with new shortCode
         }
-      : {}
+        throw err // other errors bubble up
+      }
+    }
 
-    const qr = await db.qRCode.create({
-      data: {
-        title,
-        type: type || 'WEBSITE',
-        shortCode,
-        destinationUrl,
-        fgColor: fgColor || '#000000',
-        bgColor: bgColor || '#FFFFFF',
-        logoUrl: logoUrl || null,
-        description,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
-        startsAt: startsAt ? new Date(startsAt) : null,
-        maxScans: maxScans ? parseInt(maxScans, 10) : null,
-        folderId: folderId || null,
-        organizationId: orgId,
-        creatorId: userId,
-        ...tagCreateData,
-      },
-      include: {
-        folder: true,
-        tags: { include: { tag: true } },
-      },
-    })
-
-    // Pre-cache in Redis for sub-millisecond redirect
-    await redis.set(`qr:short:${shortCode}`, destinationUrl, { ex: 600 })
+    // Pre-cache in Redis for fast redirect
+    await redis.set(`qr:short:${qr.shortCode}`, JSON.stringify({
+      destinationUrl: validatedUrl,
+      isArchived: false,
+      isInTrash: false,
+      expiresAt: qr.expiresAt?.toISOString() || null,
+      startsAt: qr.startsAt?.toISOString() || null,
+      maxScans: qr.maxScans,
+      scanCount: 0,
+    }), { ex: 600 })
 
     // Dispatch webhook event
     dispatchWebhookEvent(orgId, 'qr.created', qr).catch((err) =>
@@ -141,25 +217,46 @@ export async function POST(req: NextRequest) {
     if (error instanceof BillingError) {
       return NextResponse.json(billingErrorToResponse(error), { status: error.statusCode })
     }
-    console.error('POST /api/qr Error:', error)
-    return NextResponse.json({ error: 'Failed to create QR code' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
+// ── PATCH /api/qr — Update QR code ──
 export async function PATCH(req: NextRequest) {
   try {
     const { orgId, role } = await getCurrentUserAndOrg()
 
     // ── RBAC Check ──
     if (!hasPermission(role, 'qr:update')) {
-      return NextResponse.json({ error: 'Viewers have read-only access and cannot edit QR codes' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Viewers have read-only access and cannot edit QR codes' } },
+        { status: 403 }
+      )
     }
 
     const body = await req.json()
-    const { id, title, destinationUrl, folderId, tagIds, fgColor, bgColor, logoUrl, description } = body
+    const {
+      id,
+      title,
+      destinationUrl,
+      folderId,
+      tagIds,
+      fgColor,
+      bgColor,
+      logoUrl,
+      dotsStyle,
+      cornerDotsStyle,
+      frameTemplate,
+      frameText,
+      designConfig,
+      description,
+    } = body
 
     if (!id) {
-      return NextResponse.json({ error: 'QR Code ID is required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'QR Code ID is required' } },
+        { status: 400 }
+      )
     }
 
     const existingQR = await db.qRCode.findFirst({
@@ -167,41 +264,67 @@ export async function PATCH(req: NextRequest) {
     })
 
     if (!existingQR) {
-      return NextResponse.json({ error: 'QR Code not found' }, { status: 404 })
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'QR Code not found' } },
+        { status: 404 }
+      )
     }
 
-    // Update tags if provided
-    if (Array.isArray(tagIds)) {
-      await db.tagOnQR.deleteMany({
-        where: { qrCodeId: id },
-      })
+    // Validate destination URL if being updated
+    let validatedUrl: string | undefined
+    if (destinationUrl !== undefined) {
+      validatedUrl = validateDestinationUrl(destinationUrl)
+    }
 
-      if (tagIds.length > 0) {
-        await db.tagOnQR.createMany({
-          data: tagIds.map((tId: string) => ({ qrCodeId: id, tagId: tId })),
+    // Use a transaction for atomic tag update + QR update
+    const updated = await db.$transaction(async (tx) => {
+      // Update tags if provided
+      if (Array.isArray(tagIds)) {
+        await tx.tagOnQR.deleteMany({
+          where: { qrCodeId: id },
         })
-      }
-    }
 
-    const updated = await db.qRCode.update({
-      where: { id },
-      data: {
-        ...(title !== undefined ? { title } : {}),
-        ...(destinationUrl !== undefined ? { destinationUrl } : {}),
-        ...(folderId !== undefined ? { folderId: folderId || null } : {}),
-        ...(fgColor !== undefined ? { fgColor } : {}),
-        ...(bgColor !== undefined ? { bgColor } : {}),
-        ...(logoUrl !== undefined ? { logoUrl } : {}),
-        ...(description !== undefined ? { description } : {}),
-      },
-      include: {
-        folder: true,
-        tags: { include: { tag: true } },
-      },
+        if (tagIds.length > 0) {
+          await tx.tagOnQR.createMany({
+            data: tagIds.map((tId: string) => ({ qrCodeId: id, tagId: tId })),
+          })
+        }
+      }
+
+      return tx.qRCode.update({
+        where: { id },
+        data: {
+          ...(title !== undefined ? { title } : {}),
+          ...(validatedUrl !== undefined ? { destinationUrl: validatedUrl } : {}),
+          ...(folderId !== undefined ? { folderId: folderId || null } : {}),
+          ...(fgColor !== undefined ? { fgColor } : {}),
+          ...(bgColor !== undefined ? { bgColor } : {}),
+          ...(logoUrl !== undefined ? { logoUrl } : {}),
+          ...(dotsStyle !== undefined ? { dotsStyle } : {}),
+          ...(cornerDotsStyle !== undefined ? { cornerDotsStyle } : {}),
+          ...(frameTemplate !== undefined ? { frameTemplate } : {}),
+          ...(frameText !== undefined ? { frameText } : {}),
+          ...(designConfig !== undefined ? { redirectRules: designConfig } : {}),
+          ...(description !== undefined ? { description } : {}),
+        },
+        include: {
+          folder: true,
+          tags: { include: { tag: true } },
+        },
+      })
     })
 
-    if (destinationUrl && destinationUrl !== existingQR.destinationUrl) {
-      await redis.set(`qr:short:${existingQR.shortCode}`, destinationUrl, { ex: 600 })
+    // Update Redis cache if destination URL changed
+    if (validatedUrl && validatedUrl !== existingQR.destinationUrl) {
+      await redis.set(`qr:short:${existingQR.shortCode}`, JSON.stringify({
+        destinationUrl: validatedUrl,
+        isArchived: updated.isArchived,
+        isInTrash: updated.isInTrash,
+        expiresAt: updated.expiresAt?.toISOString() || null,
+        startsAt: updated.startsAt?.toISOString() || null,
+        maxScans: updated.maxScans,
+        scanCount: updated.scanCount,
+      }), { ex: 600 })
     }
 
     // Dispatch webhook event
@@ -211,33 +334,43 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: updated })
   } catch (error) {
-    console.error('PATCH /api/qr Error:', error)
-    return NextResponse.json({ error: 'Failed to update QR code' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
+// ── DELETE /api/qr — Delete QR code ──
 export async function DELETE(req: NextRequest) {
   try {
     const { orgId, role } = await getCurrentUserAndOrg()
 
     // ── RBAC Check ──
     if (!hasPermission(role, 'qr:delete')) {
-      return NextResponse.json({ error: 'Viewers have read-only access and cannot delete QR codes' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Viewers have read-only access and cannot delete QR codes' } },
+        { status: 403 }
+      )
     }
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
 
     if (!id) {
-      return NextResponse.json({ error: 'QR Code ID is required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'QR Code ID is required' } },
+        { status: 400 }
+      )
     }
 
+    // Verify ownership via organizationId
     const qr = await db.qRCode.findFirst({
       where: { id, organizationId: orgId },
     })
 
     if (!qr) {
-      return NextResponse.json({ error: 'QR Code not found' }, { status: 404 })
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'QR Code not found' } },
+        { status: 404 }
+      )
     }
 
     await db.qRCode.delete({ where: { id: qr.id } })
@@ -250,7 +383,6 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'QR Code deleted' })
   } catch (error) {
-    console.error('DELETE /api/qr Error:', error)
-    return NextResponse.json({ error: 'Failed to delete QR code' }, { status: 500 })
+    return handleApiError(error)
   }
 }

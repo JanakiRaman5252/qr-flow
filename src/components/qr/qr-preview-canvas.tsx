@@ -1,156 +1,141 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
+import {
+  Download,
+  FileImage,
+  FileCode,
+  FileText,
+  Loader2,
+  Sparkles,
+  Check,
+} from 'lucide-react'
 import QRCodeLib from 'qrcode'
-import { Download, FileImage, FileCode, FileText } from 'lucide-react'
+import {
+  DEFAULT_QR_DESIGN,
+  type QRDesignConfig,
+} from '@/lib/qr-design'
+import {
+  renderQRToCanvas,
+  exportHighResPNG,
+  exportPrintReadyPDF,
+} from '@/lib/qr-canvas-renderer'
 
-interface QRCanvasProps {
+export interface QRPreviewCanvasProps {
   content: string
-  fgColor: string
-  bgColor: string
+  // Full or partial design config
+  designConfig?: Partial<QRDesignConfig>
+  // Backward compatible props
+  fgColor?: string
+  bgColor?: string
   logoUrl?: string | null
   frameText?: string
   dotsStyle?: string
   width?: number
+  showDownloads?: boolean
+  title?: string
 }
 
 export function QRPreviewCanvas({
   content,
+  designConfig,
   fgColor,
   bgColor,
   logoUrl,
   frameText,
-  dotsStyle = 'square',
-  width = 300,
-}: QRCanvasProps) {
+  dotsStyle,
+  width = 280,
+  showDownloads = true,
+  title = 'QR Code',
+}: QRPreviewCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [svgString, setSvgString] = useState('')
+  const [isRendering, setIsRendering] = useState(false)
+  const [downloadingFormat, setDownloadingFormat] = useState<string | null>(null)
+  const [copiedSuccess, setCopiedSuccess] = useState(false)
+
+  // Merge full design configuration
+  const mergedConfig: QRDesignConfig = useMemo(() => {
+    return {
+      ...DEFAULT_QR_DESIGN,
+      ...(fgColor ? { fgColor } : {}),
+      ...(bgColor ? { bgColor } : {}),
+      ...(logoUrl !== undefined ? { logoUrl } : {}),
+      ...(frameText ? { frameText } : {}),
+      ...(dotsStyle ? { dotsStyle: dotsStyle as any } : {}),
+      ...(designConfig || {}),
+    }
+  }, [designConfig, fgColor, bgColor, logoUrl, frameText, dotsStyle])
 
   useEffect(() => {
-    async function renderQR() {
+    let isCancelled = false
+
+    async function updateCanvas() {
       if (!canvasRef.current) return
+      setIsRendering(true)
 
-      const canvas = canvasRef.current
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
+      try {
+        await renderQRToCanvas(canvasRef.current, {
+          content: content || 'https://qrflow.io',
+          config: mergedConfig,
+          width,
+        })
 
-      // Render base QR onto canvas
-      await QRCodeLib.toCanvas(canvas, content || 'https://qrflow.io', {
-        width,
-        margin: 2,
-        color: {
-          dark: fgColor || '#000000',
-          light: bgColor || '#FFFFFF',
-        },
-        errorCorrectionLevel: 'H', // High error correction permits logo overlay
-      })
-
-      // Generate SVG string
-      const svg = await QRCodeLib.toString(content || 'https://qrflow.io', {
-        type: 'svg',
-        margin: 2,
-        color: {
-          dark: fgColor || '#000000',
-          light: bgColor || '#FFFFFF',
-        },
-      })
-      setSvgString(svg)
-
-      // Draw custom logo overlay if provided
-      if (logoUrl) {
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        img.src = logoUrl
-        img.onload = () => {
-          const logoSize = width * 0.22
-          const logoX = (width - logoSize) / 2
-          const logoY = (width - logoSize) / 2
-
-          // Draw white background circle / rounded rect behind logo
-          ctx.fillStyle = bgColor || '#FFFFFF'
-          ctx.beginPath()
-          ctx.arc(width / 2, width / 2, logoSize / 2 + 4, 0, Math.PI * 2)
-          ctx.fill()
-
-          // Draw uploaded logo centered
-          ctx.drawImage(img, logoX, logoY, logoSize, logoSize)
-        }
+        // Generate vector SVG fallback
+        const svg = await QRCodeLib.toString(content || 'https://qrflow.io', {
+          type: 'svg',
+          margin: 2,
+          color: {
+            dark: mergedConfig.fgColor || '#000000',
+            light: mergedConfig.bgColor || '#FFFFFF',
+          },
+        })
+        if (!isCancelled) setSvgString(svg)
+      } catch (err) {
+        console.error('QR Render Error:', err)
+      } finally {
+        if (!isCancelled) setIsRendering(false)
       }
     }
 
-    renderQR()
-  }, [content, fgColor, bgColor, logoUrl, width])
+    updateCanvas()
 
-  // Download High-Resolution PNG (1024x1024)
-  const downloadPNG = async () => {
-    const tempCanvas = document.createElement('canvas')
-    const hiResWidth = 1024
-    tempCanvas.width = hiResWidth
-    tempCanvas.height = hiResWidth
-
-    await QRCodeLib.toCanvas(tempCanvas, content || 'https://qrflow.io', {
-      width: hiResWidth,
-      margin: 2,
-      color: {
-        dark: fgColor || '#000000',
-        light: bgColor || '#FFFFFF',
-      },
-      errorCorrectionLevel: 'H',
-    })
-
-    if (logoUrl) {
-      const ctx = tempCanvas.getContext('2d')
-      if (ctx) {
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        img.src = logoUrl
-        img.onload = () => {
-          const logoSize = hiResWidth * 0.22
-          const logoX = (hiResWidth - logoSize) / 2
-          const logoY = (hiResWidth - logoSize) / 2
-
-          ctx.fillStyle = bgColor || '#FFFFFF'
-          ctx.beginPath()
-          ctx.arc(hiResWidth / 2, hiResWidth / 2, logoSize / 2 + 12, 0, Math.PI * 2)
-          ctx.fill()
-
-          ctx.drawImage(img, logoX, logoY, logoSize, logoSize)
-
-          triggerDownload(tempCanvas.toDataURL('image/png'), 'qrflow-qrcode-1024x1024.png')
-        }
-        return
-      }
+    return () => {
+      isCancelled = true
     }
+  }, [content, mergedConfig, width])
 
-    triggerDownload(tempCanvas.toDataURL('image/png'), 'qrflow-qrcode-1024x1024.png')
+  // Download High-Resolution PNG (2048x2048)
+  const handleDownloadPNG = async (res = 2048) => {
+    setDownloadingFormat('png')
+    try {
+      const dataUrl = await exportHighResPNG(content || 'https://qrflow.io', mergedConfig, res)
+      triggerDownload(dataUrl, `qrflow-${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${res}px.png`)
+    } catch (err) {
+      console.error('Download PNG Error:', err)
+    } finally {
+      setDownloadingFormat(null)
+    }
   }
 
-  // Download SVG
-  const downloadSVG = () => {
-    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    triggerDownload(url, 'qrflow-qrcode.svg')
+  // Download Vector SVG
+  const handleDownloadSVG = () => {
+    setDownloadingFormat('svg')
+    try {
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      triggerDownload(url, `qrflow-${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.svg`)
+    } catch (err) {
+      console.error('Download SVG Error:', err)
+    } finally {
+      setDownloadingFormat(null)
+    }
   }
 
-  // Download Print Ready PDF
-  const downloadPDF = () => {
+  // Print-Ready PDF
+  const handleDownloadPDF = () => {
     if (!canvasRef.current) return
-    const dataUrl = canvasRef.current.toDataURL('image/png')
-    const printWindow = window.open('', '_blank')
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head><title>Print QR Code — QRFlow</title></head>
-          <body style="display:flex;flex-direction:column;align-items:center;justify-center:center;height:100vh;margin:0;font-family:sans-serif;">
-            <h2>Print-Ready QR Code</h2>
-            <img src="${dataUrl}" style="width:300px;height:300px;margin-bottom:20px;" />
-            <p style="color:#666;font-size:14px;">Scan with any smartphone camera</p>
-            <script>window.onload = function() { window.print(); window.close(); }</script>
-          </body>
-        </html>
-      `)
-      printWindow.document.close()
-    }
+    exportPrintReadyPDF(canvasRef.current, title)
   }
 
   const triggerDownload = (url: string, filename: string) => {
@@ -163,46 +148,62 @@ export function QRPreviewCanvas({
   }
 
   return (
-    <div className="flex flex-col items-center space-y-4">
-      {/* Frame Container */}
-      <div className="p-5 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col items-center space-y-3">
-        {frameText && (
-          <span className="text-xs font-extrabold uppercase tracking-widest text-slate-800 font-mono">
-            {frameText}
-          </span>
+    <div className="flex flex-col items-center space-y-4 w-full max-w-xs">
+      {/* Canvas Frame Container */}
+      <div className="p-3 sm:p-4 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl flex flex-col items-center justify-center relative overflow-hidden transition-all group">
+        <canvas
+          ref={canvasRef}
+          className="rounded-2xl max-w-full h-auto shadow-sm"
+          style={{ imageRendering: 'auto' }}
+        />
+
+        {isRendering && (
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center rounded-3xl">
+            <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+          </div>
         )}
-        <canvas ref={canvasRef} width={width} height={width} className="rounded-lg" />
       </div>
 
       {/* Download Action Buttons */}
-      <div className="w-full grid grid-cols-3 gap-2 pt-2">
-        <button
-          type="button"
-          onClick={downloadPNG}
-          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
-        >
-          <FileImage className="w-3.5 h-3.5" />
-          <span>PNG</span>
-        </button>
+      {showDownloads && (
+        <div className="w-full space-y-2 pt-1">
+          <button
+            type="button"
+            onClick={() => handleDownloadPNG(2048)}
+            disabled={isRendering || downloadingFormat !== null}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/25 transition-all disabled:opacity-60"
+          >
+            {downloadingFormat === 'png' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            <span>Download High-Res PNG (2048px)</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={downloadSVG}
-          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all border border-slate-700"
-        >
-          <FileCode className="w-3.5 h-3.5 text-cyan-400" />
-          <span>SVG</span>
-        </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadSVG}
+              disabled={isRendering || downloadingFormat !== null}
+              className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-slate-800 transition-all hover:border-slate-700"
+            >
+              <FileCode className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Vector SVG</span>
+            </button>
 
-        <button
-          type="button"
-          onClick={downloadPDF}
-          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all border border-slate-700"
-        >
-          <FileText className="w-3.5 h-3.5 text-pink-400" />
-          <span>PDF</span>
-        </button>
-      </div>
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
+              disabled={isRendering}
+              className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold border border-slate-800 transition-all hover:border-slate-700"
+            >
+              <FileText className="w-3.5 h-3.5 text-pink-400" />
+              <span>Print PDF</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -29,6 +29,11 @@ interface QRCodeItem {
   fgColor?: string
   bgColor?: string
   logoUrl?: string | null
+  dotsStyle?: string
+  cornerDotsStyle?: string
+  frameTemplate?: string | null
+  frameText?: string | null
+  redirectRules?: any
   isFavorite: boolean
   createdAt: string
   folderId?: string | null
@@ -366,6 +371,35 @@ function QRListContent() {
             ))
           )}
         </div>
+      )}
+
+      {/* Download Modal with full customized design */}
+      {activeDownloadQR && (
+        <QRDownloadModal
+          isOpen={true}
+          onClose={() => setActiveDownloadQR(null)}
+          shortCode={activeDownloadQR.shortCode}
+          title={activeDownloadQR.title}
+          destinationUrl={activeDownloadQR.destinationUrl}
+          fgColor={activeDownloadQR.fgColor}
+          bgColor={activeDownloadQR.bgColor}
+          logoUrl={activeDownloadQR.logoUrl}
+          dotsStyle={activeDownloadQR.dotsStyle}
+          cornerDotsStyle={activeDownloadQR.cornerDotsStyle}
+          frameTemplate={activeDownloadQR.frameTemplate}
+          frameText={activeDownloadQR.frameText}
+          designConfig={activeDownloadQR.redirectRules as any}
+        />
+      )}
+
+      {/* Organize Modal */}
+      {organizeQR && (
+        <QROrganizeModal
+          isOpen={true}
+          onClose={() => setOrganizeQR(null)}
+          qr={organizeQR}
+          onSuccess={fetchQRCodes}
+        />
       )}
     </div>
   )

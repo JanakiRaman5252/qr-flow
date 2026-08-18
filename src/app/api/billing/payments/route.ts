@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
 import { db } from '@/lib/db'
+import { handleApiError } from '@/lib/errors'
 
 export async function GET(req: NextRequest) {
   try {
@@ -27,7 +28,6 @@ export async function GET(req: NextRequest) {
       data: { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
     })
   } catch (error) {
-    console.error('GET /api/billing/payments Error:', error)
-    return NextResponse.json({ error: 'Failed to fetch payments' }, { status: 500 })
+    return handleApiError(error)
   }
 }

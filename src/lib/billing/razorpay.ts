@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────
-// Razorpay Server Client — Extended
+// Razorpay Server Client — Production Hardened
 // ─────────────────────────────────────────────
 // Provider-specific logic is isolated here so a future
 // migration to Stripe or another gateway only touches this file.
@@ -8,9 +8,17 @@ import Razorpay from 'razorpay'
 import crypto from 'crypto'
 import { logger } from '@/lib/logger'
 
+// ── Fail fast if Razorpay credentials are missing ──
+const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET
+
+if (!razorpayKeyId || !razorpayKeySecret) {
+  logger.warn('Razorpay credentials not configured — billing features will be unavailable')
+}
+
 export const razorpay = new Razorpay({
-  key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'secret_placeholder',
+  key_id: razorpayKeyId || '',
+  key_secret: razorpayKeySecret || '',
 })
 
 // ── Signature Verification ──────────────────
@@ -24,14 +32,29 @@ export function verifyPaymentSignature({
   paymentId: string
   signature: string
 }): boolean {
-  const secret = process.env.RAZORPAY_KEY_SECRET || ''
+  const secret = process.env.RAZORPAY_KEY_SECRET
+  if (!secret) {
+    logger.error('RAZORPAY_KEY_SECRET is not configured — cannot verify payment signature')
+    return false
+  }
   const generated = crypto
     .createHmac('sha256', secret)
     .update(`${paymentId}|${subscriptionId}`)
     .digest('hex')
-  return generated === signature
+
+  // Use timing-safe comparison to prevent timing attacks
+  try {
+    return crypto.timingSafeEqual(Buffer.from(generated, 'hex'), Buffer.from(signature, 'hex'))
+  } catch {
+    return false
+  }
 }
 
+/**
+ * Verify Razorpay webhook signature.
+ * FAILS CLOSED: missing secret or invalid signature → reject.
+ * No development bypasses.
+ */
 export function verifyWebhookSignature({
   body,
   signature,
@@ -39,16 +62,27 @@ export function verifyWebhookSignature({
   body: string
   signature: string
 }): boolean {
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || ''
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET
   if (!webhookSecret) {
-    logger.warn('RAZORPAY_WEBHOOK_SECRET is not set — skipping verification in dev')
-    return process.env.NODE_ENV === 'development'
+    logger.error('RAZORPAY_WEBHOOK_SECRET is not configured — rejecting webhook')
+    return false // Fail closed
   }
+  if (!signature) {
+    logger.warn('Webhook request missing signature header')
+    return false
+  }
+
   const expected = crypto
     .createHmac('sha256', webhookSecret)
     .update(body)
     .digest('hex')
-  return expected === signature
+
+  // Use timing-safe comparison to prevent timing attacks
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(signature, 'hex'))
+  } catch {
+    return false
+  }
 }
 
 // ── Plan Management ─────────────────────────

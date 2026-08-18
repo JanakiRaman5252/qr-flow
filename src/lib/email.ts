@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
 
-export const resend = new Resend(process.env.RESEND_API_KEY || 're_placeholder')
+export const resend = new Resend(process.env.RESEND_API_KEY || '')
 
 export async function sendEmail({
   to,
@@ -33,7 +33,13 @@ export async function sendEmail({
     })
 
     if (result.error) {
-      console.error('[Resend Error]:', result.error)
+      console.error('[Resend Error]:', result.error.message || result.error)
+      if (result.error.message?.includes('testing emails')) {
+        console.warn('\n[Resend Domain Restriction Notice]:')
+        console.warn('Resend free onboarding address (onboarding@resend.dev) can only send emails to the account owner.')
+        console.warn('To send real emails to any address, add and verify your custom domain at https://resend.com/domains')
+        console.warn('and set EMAIL_FROM="QRFlow <noreply@yourdomain.com>" in your .env file.\n')
+      }
       return { success: false, error: result.error.message }
     }
 

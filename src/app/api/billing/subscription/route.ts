@@ -1,7 +1,8 @@
 // GET /api/billing/subscription — returns current tenant's subscription
 import { NextResponse } from 'next/server'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
-import { getActiveSubscription, createFreeSubscription } from '@/lib/billing/subscription'
+import { getActiveSubscription, createTrialSubscription } from '@/lib/billing/subscription'
+import { handleApiError } from '@/lib/errors'
 
 export async function GET() {
   try {
@@ -9,15 +10,14 @@ export async function GET() {
 
     let subscription = await getActiveSubscription(orgId)
 
-    // Auto-create free subscription if none exists
+    // Auto-create 7-day trial subscription if none exists
     if (!subscription) {
-      await createFreeSubscription(orgId)
+      await createTrialSubscription(orgId)
       subscription = await getActiveSubscription(orgId)
     }
 
     return NextResponse.json({ success: true, data: subscription })
   } catch (error) {
-    console.error('GET /api/billing/subscription Error:', error)
-    return NextResponse.json({ error: 'Failed to fetch subscription' }, { status: 500 })
+    return handleApiError(error)
   }
 }

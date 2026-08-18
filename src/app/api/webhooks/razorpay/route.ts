@@ -86,8 +86,8 @@ export async function POST(req: NextRequest) {
       // Best effort
     }
 
-    // Return 200 to prevent Razorpay retries for non-transient errors
-    return NextResponse.json({ received: true, error: 'processing_failed' })
+    // Return 500 so Razorpay retries (idempotency check prevents duplicate processing)
+    return NextResponse.json({ received: true, error: 'processing_failed' }, { status: 500 })
   }
 }
 

@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
 import { hasPermission } from '@/lib/rbac'
+import { handleApiError } from '@/lib/errors'
 
 export async function GET() {
   try {
@@ -13,10 +14,11 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     })
 
+    // Mask API keys — only show last 8 characters
     const formatted = keys.map((k) => ({
       id: k.id,
       name: k.name,
-      key: k.key,
+      key: `qrf_live_${'*'.repeat(24)}${k.key.slice(-8)}`,
       scopes: k.scopes,
       createdAt: k.createdAt.toISOString().split('T')[0],
       lastUsed: k.lastUsedAt ? k.lastUsedAt.toISOString() : 'Never',
@@ -24,8 +26,7 @@ export async function GET() {
 
     return NextResponse.json({ success: true, data: formatted })
   } catch (error) {
-    console.error('GET /api/api-keys Error:', error)
-    return NextResponse.json({ error: 'Failed to fetch API keys' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -34,16 +35,22 @@ export async function POST(req: NextRequest) {
     const { userId, orgId, role } = await getCurrentUserAndOrg()
 
     if (!hasPermission(role, 'api_keys:manage')) {
-      return NextResponse.json({ error: 'Only Workspace Owners and Admins can create API keys' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only Workspace Owners and Admins can create API keys' } },
+        { status: 403 }
+      )
     }
 
     const { name, scopes } = await req.json()
 
     if (!name) {
-      return NextResponse.json({ error: 'API key name is required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'API key name is required' } },
+        { status: 400 }
+      )
     }
 
-    const randomHash = crypto.randomBytes(16).toString('hex')
+    const randomHash = crypto.randomBytes(24).toString('hex')
     const keyString = `qrf_live_${randomHash}`
 
     const apiKey = await db.aPIKey.create({
@@ -56,10 +63,18 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ success: true, data: apiKey }, { status: 201 })
+    // Return the FULL key only on creation (it can't be retrieved again)
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: apiKey.id,
+        name: apiKey.name,
+        key: apiKey.key, // Only time full key is visible
+        scopes: apiKey.scopes,
+      },
+    }, { status: 201 })
   } catch (error) {
-    console.error('POST /api/api-keys Error:', error)
-    return NextResponse.json({ error: 'Failed to generate API key' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -68,14 +83,20 @@ export async function DELETE(req: NextRequest) {
     const { orgId, role } = await getCurrentUserAndOrg()
 
     if (!hasPermission(role, 'api_keys:manage')) {
-      return NextResponse.json({ error: 'Only Workspace Owners and Admins can revoke API keys' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only Workspace Owners and Admins can revoke API keys' } },
+        { status: 403 }
+      )
     }
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
 
     if (!id) {
-      return NextResponse.json({ error: 'API key ID is required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'API key ID is required' } },
+        { status: 400 }
+      )
     }
 
     await db.aPIKey.deleteMany({
@@ -84,7 +105,6 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'API key revoked' })
   } catch (error) {
-    console.error('DELETE /api/api-keys Error:', error)
-    return NextResponse.json({ error: 'Failed to revoke API key' }, { status: 500 })
+    return handleApiError(error)
   }
 }

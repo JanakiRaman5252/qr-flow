@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
 import { scheduleDowngrade } from '@/lib/billing/subscription'
 import { BillingError, billingErrorToResponse } from '@/lib/billing/billing-errors'
+import { hasPermission } from '@/lib/rbac'
+import { handleApiError } from '@/lib/errors'
 import { z } from 'zod'
 
 const downgradeSchema = z.object({
@@ -11,13 +13,21 @@ const downgradeSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, orgId } = await getCurrentUserAndOrg()
+    const { userId, orgId, role } = await getCurrentUserAndOrg()
+
+    if (!hasPermission(role, 'billing:manage')) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only Owners and Admins can manage billing' } },
+        { status: 403 }
+      )
+    }
+
     const body = await req.json()
     const parsed = downgradeSchema.safeParse(body)
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Invalid request', details: parsed.error.flatten() },
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid request', details: parsed.error.flatten() } },
         { status: 400 }
       )
     }
@@ -36,7 +46,6 @@ export async function POST(req: NextRequest) {
     if (error instanceof BillingError) {
       return NextResponse.json(billingErrorToResponse(error), { status: error.statusCode })
     }
-    console.error('POST /api/billing/downgrade Error:', error)
-    return NextResponse.json({ error: 'Failed to schedule downgrade' }, { status: 500 })
+    return handleApiError(error)
   }
 }

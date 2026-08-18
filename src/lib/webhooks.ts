@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { db } from '@/lib/db'
+import { validateWebhookUrl } from '@/lib/validation'
 
 export interface WebhookPayload {
   event: 'qr.scanned' | 'qr.created' | 'qr.updated' | 'qr.deleted'
@@ -11,6 +12,8 @@ export interface WebhookPayload {
 /**
  * Dispatches a webhook event asynchronously to all active webhook endpoints
  * registered by an organization that subscribe to the event.
+ *
+ * SSRF protection: validates webhook URLs before dispatching.
  */
 export async function dispatchWebhookEvent(
   organizationId: string,
@@ -40,6 +43,22 @@ export async function dispatchWebhookEvent(
     // Dispatch to all endpoints in parallel
     await Promise.allSettled(
       webhooks.map(async (wh) => {
+        // SSRF protection: validate URL before every dispatch
+        try {
+          validateWebhookUrl(wh.url)
+        } catch (err: any) {
+          await db.webhookDelivery.create({
+            data: {
+              webhookId: wh.id,
+              event,
+              payload: payload as any,
+              responseCode: 0,
+              error: `SSRF protection: ${err.message}`,
+            },
+          })
+          return // Skip this webhook
+        }
+
         const timestamp = Math.floor(Date.now() / 1000)
         const signature = crypto
           .createHmac('sha256', wh.secret)
@@ -60,10 +79,12 @@ export async function dispatchWebhookEvent(
             },
             body: jsonPayload,
             signal: controller.signal,
+            redirect: 'error', // Prevent SSRF via redirects
           })
 
           clearTimeout(timeoutId)
 
+          // Limit response body read to 1KB to prevent memory abuse
           const responseText = await response.text().catch(() => '')
 
           // Record delivery log

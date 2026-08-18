@@ -1,11 +1,21 @@
 // POST /api/billing/resume — resume cancelled subscription
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
 import { resumeSubscription } from '@/lib/billing/subscription'
+import { hasPermission } from '@/lib/rbac'
+import { handleApiError } from '@/lib/errors'
 
 export async function POST() {
   try {
-    const { userId, orgId } = await getCurrentUserAndOrg()
+    const { userId, orgId, role } = await getCurrentUserAndOrg()
+
+    if (!hasPermission(role, 'billing:manage')) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only Owners and Admins can resume subscriptions' } },
+        { status: 403 }
+      )
+    }
+
     const result = await resumeSubscription(orgId, userId)
 
     return NextResponse.json({
@@ -16,11 +26,7 @@ export async function POST() {
         message: 'Your subscription has been resumed.',
       },
     })
-  } catch (error: any) {
-    console.error('POST /api/billing/resume Error:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to resume subscription' },
-      { status: 500 }
-    )
+  } catch (error) {
+    return handleApiError(error)
   }
 }

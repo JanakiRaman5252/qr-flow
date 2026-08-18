@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-QrCode,
-Mail,
-Lock,
-ArrowRight,
-Loader2,
-AlertCircle,
+  QrCode,
+  Mail,
+  Lock,
+  ArrowRight,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 
@@ -17,20 +18,29 @@ export default function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
-  const isInvited = searchParams.get('invited') === 'true'
+  const isInvited = mounted && searchParams.get('invited') === 'true'
   const queryEmail = searchParams.get('email') || ''
+  const isVerified = mounted && searchParams.get('verified') === 'true'
 
   const [email, setEmail] = useState(queryEmail)
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [resendMsg, setResendMsg] = useState('')
+  const [isResending, setIsResending] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     setIsLoading(true)
     setError('')
+    setResendMsg('')
 
     const result = await authClient.signIn.email({
       email,
@@ -48,6 +58,25 @@ export default function LoginForm() {
 
     router.push(callbackUrl)
     router.refresh()
+  }
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      setResendMsg('Please enter your email address first.')
+      return
+    }
+    setIsResending(true)
+    setResendMsg('')
+    const res = await authClient.sendVerificationEmail({
+      email,
+      callbackURL: '/dashboard',
+    })
+    setIsResending(false)
+    if (res.error) {
+      setResendMsg(res.error.message || 'Failed to send verification email.')
+    } else {
+      setResendMsg('Verification email sent! Please check your inbox.')
+    }
   }
 
   const handleGoogleSignIn = async () => {
@@ -95,7 +124,10 @@ export default function LoginForm() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4">
-        <div className="bg-slate-900/80 backdrop-blur-xl py-8 px-6 shadow-2xl border border-slate-800 rounded-2xl sm:px-10 space-y-6">
+        <div
+          suppressHydrationWarning
+          className="bg-slate-900/80 backdrop-blur-xl py-8 px-6 shadow-2xl border border-slate-800 rounded-2xl sm:px-10 space-y-6"
+        >
 
           {isInvited && (
             <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-start space-x-2.5">
@@ -113,7 +145,7 @@ export default function LoginForm() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 mb-6">
             <button
               type="button"
               onClick={handleGoogleSignIn}
@@ -143,12 +175,41 @@ export default function LoginForm() {
           </div>
         </div>
 
-        {error && (
-          <div className="mb-4 flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+          {isVerified && (
+            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center space-x-2.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span>Email verified successfully! You can now sign in to your account.</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+              {(error.toLowerCase().includes('not verified') || error.toLowerCase().includes('email')) && (
+                <div className="pt-1 border-t border-red-500/20">
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={isResending}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold underline flex items-center gap-1.5 disabled:opacity-60"
+                  >
+                    {isResending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                    <span>Resend verification email to {email || 'your address'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {resendMsg && (
+            <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-center space-x-2.5">
+              <Mail className="w-4 h-4 shrink-0 text-indigo-400" />
+              <span>{resendMsg}</span>
+            </div>
+          )}
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <div>

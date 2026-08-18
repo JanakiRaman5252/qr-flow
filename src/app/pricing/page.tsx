@@ -6,7 +6,9 @@ import { Check, Sparkles, ArrowRight } from 'lucide-react'
 export const revalidate = 60 // Cache for 60 seconds
 
 export default async function PublicPricingPage() {
-  const plans = await getActivePlans()
+  // Filter out any legacy free plans from the pricing page
+  const allPlans = await getActivePlans()
+  const plans = allPlans.filter((p) => !p.isFree)
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 py-20 px-4 sm:px-6 lg:px-8">
@@ -21,12 +23,12 @@ export default async function PublicPricingPage() {
             Simple, predictable plans for every marketing team
           </h1>
           <p className="text-slate-400 text-base">
-            Start with our generous free plan. Scale up as your scan volume and dynamic QR requirements grow.
+            Try any plan free for 7 days. No credit card required. Pick the plan that fits your scale.
           </p>
         </div>
 
         {/* Pricing Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-stretch">
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.min(plans.length, 4)} gap-8 items-stretch`}>
           {plans.map((plan) => {
             const features: string[] = Array.isArray(plan.marketingFeatures)
               ? (plan.marketingFeatures as string[])
@@ -54,10 +56,15 @@ export default async function PublicPricingPage() {
                   <div className="my-6">
                     <div className="flex items-baseline space-x-1">
                       <span className="text-4xl font-extrabold tracking-tight text-white">
-                        {plan.isFree ? 'Free' : formatPrice(plan.monthlyPrice)}
+                        {formatPrice(plan.monthlyPrice)}
                       </span>
-                      {!plan.isFree && <span className="text-xs text-slate-400">/month</span>}
+                      <span className="text-xs text-slate-400">/month</span>
                     </div>
+                    {plan.trialDays > 0 && (
+                      <p className="mt-2 text-xs text-emerald-400 font-semibold">
+                        {plan.trialDays}-day free trial
+                      </p>
+                    )}
                   </div>
 
                   <ul className="space-y-3 border-t border-slate-800/80 pt-6 my-6 text-xs text-slate-300">
@@ -78,7 +85,7 @@ export default async function PublicPricingPage() {
                       : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
                   }`}
                 >
-                  <span>Get Started</span>
+                  <span>Start Free Trial</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>

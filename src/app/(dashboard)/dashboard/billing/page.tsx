@@ -130,8 +130,13 @@ export default function BillingPage() {
 
     try {
       const targetPlan = plans.find((p) => p.id === planId)
-      if (targetPlan?.isFree) {
-        // Free plan transition / downgrade
+
+      // Check if downgrading to a lower plan
+      const currentSortOrder = currentPlan?.sortOrder ?? 0
+      const targetSortOrder = targetPlan?.sortOrder ?? 0
+
+      if (targetSortOrder < currentSortOrder) {
+        // Downgrade
         const res = await fetch('/api/billing/downgrade', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -139,10 +144,10 @@ export default function BillingPage() {
         })
         const json = await res.json()
         if (json.success) {
-          setActionSuccess(json.data.message || 'Scheduled downgrade to Free plan.')
+          setActionSuccess(json.data.message || 'Downgrade scheduled at end of billing period.')
           fetchData()
         } else {
-          setActionError(json.error || json.message || 'Failed to change plan.')
+          setActionError(json.error?.message || json.message || 'Failed to change plan.')
         }
         setProcessingPlanId(null)
         return
@@ -337,7 +342,7 @@ export default function BillingPage() {
             </div>
 
             <div className="flex items-baseline space-x-3">
-              <h2 className="text-3xl font-black text-white">{currentPlan?.name || 'Free'}</h2>
+              <h2 className="text-3xl font-black text-white">{currentPlan?.name || 'Trial'}</h2>
               {subscription?.amount ? (
                 <span className="text-sm font-semibold text-slate-400">
                   ({formatPrice(subscription.amount, subscription.currency)}/{subscription.billingCycle?.toLowerCase()})
@@ -376,7 +381,7 @@ export default function BillingPage() {
               >
                 Resume Subscription
               </button>
-            ) : subscription && !currentPlan?.isFree ? (
+            ) : subscription ? (
               <button
                 onClick={() => handleCancelSubscription(false)}
                 className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/10 hover:text-rose-400 text-slate-300 font-semibold text-xs border border-slate-700 transition-all"

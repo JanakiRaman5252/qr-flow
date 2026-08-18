@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
 import { getInvoices } from '@/lib/billing/invoices'
+import { handleApiError } from '@/lib/errors'
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,7 +15,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: result })
   } catch (error) {
-    console.error('GET /api/billing/invoices Error:', error)
-    return NextResponse.json({ error: 'Failed to fetch invoices' }, { status: 500 })
+    return handleApiError(error)
   }
 }

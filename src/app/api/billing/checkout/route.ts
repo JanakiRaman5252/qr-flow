@@ -1,9 +1,10 @@
 // POST /api/billing/checkout — create Razorpay checkout session
-// POST /api/billing/checkout/verify — handled in verify/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
 import { createCheckout } from '@/lib/billing/checkout'
 import { BillingError, billingErrorToResponse } from '@/lib/billing/billing-errors'
+import { hasPermission } from '@/lib/rbac'
+import { handleApiError } from '@/lib/errors'
 import { z } from 'zod'
 
 const checkoutSchema = z.object({
@@ -13,13 +14,22 @@ const checkoutSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, orgId } = await getCurrentUserAndOrg()
+    const { userId, orgId, role } = await getCurrentUserAndOrg()
+
+    // RBAC: Only OWNER and ADMIN can manage billing
+    if (!hasPermission(role, 'billing:manage')) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only workspace Owners and Admins can manage billing' } },
+        { status: 403 }
+      )
+    }
+
     const body = await req.json()
     const parsed = checkoutSchema.safeParse(body)
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Invalid request', details: parsed.error.flatten() },
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid request', details: parsed.error.flatten() } },
         { status: 400 }
       )
     }
@@ -31,7 +41,6 @@ export async function POST(req: NextRequest) {
     if (error instanceof BillingError) {
       return NextResponse.json(billingErrorToResponse(error), { status: error.statusCode })
     }
-    console.error('POST /api/billing/checkout Error:', error)
-    return NextResponse.json({ error: 'Failed to create checkout' }, { status: 500 })
+    return handleApiError(error)
   }
 }

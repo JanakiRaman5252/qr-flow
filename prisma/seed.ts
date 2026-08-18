@@ -9,41 +9,14 @@ import { PrismaClient } from '@prisma/client'
 const db = new PrismaClient()
 
 const PLANS = [
-  {
-    name: 'Free',
-    slug: 'free',
-    description: 'Get started with basic QR codes',
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    isFree: true,
-    sortOrder: 0,
-    marketingFeatures: [
-      '5 Dynamic QR Codes',
-      '1,000 Scans/month',
-      '1 Team Member',
-      'Basic Analytics',
-    ],
-    entitlements: [
-      { entitlementKey: 'QR_CODE_LIMIT', valueType: 'NUMERIC' as const, numericValue: 5 },
-      { entitlementKey: 'MONTHLY_SCAN_LIMIT', valueType: 'NUMERIC' as const, numericValue: 1000 },
-      { entitlementKey: 'TEAM_MEMBER_LIMIT', valueType: 'NUMERIC' as const, numericValue: 1 },
-      { entitlementKey: 'ADVANCED_ANALYTICS', valueType: 'BOOLEAN' as const, booleanValue: false },
-      { entitlementKey: 'CUSTOM_DOMAIN', valueType: 'BOOLEAN' as const, booleanValue: false },
-      { entitlementKey: 'API_ACCESS', valueType: 'BOOLEAN' as const, booleanValue: false },
-      { entitlementKey: 'CUSTOM_BRANDING', valueType: 'BOOLEAN' as const, booleanValue: false },
-      { entitlementKey: 'WHITE_LABEL', valueType: 'BOOLEAN' as const, booleanValue: false },
-      { entitlementKey: 'EXPORT_DATA', valueType: 'BOOLEAN' as const, booleanValue: false },
-      { entitlementKey: 'BULK_QR_GENERATION', valueType: 'BOOLEAN' as const, booleanValue: false },
-      { entitlementKey: 'PRIORITY_SUPPORT', valueType: 'BOOLEAN' as const, booleanValue: false },
-    ],
-  },
+
   {
     name: 'Starter',
     slug: 'starter',
     description: 'Essential tools for creators and small businesses',
     monthlyPrice: 49900, // ₹499
     yearlyPrice: 499000, // ₹4,990
-    trialDays: 14,
+    trialDays: 7,
     sortOrder: 1,
     marketingFeatures: [
       '50 Dynamic QR Codes',
@@ -73,7 +46,7 @@ const PLANS = [
     description: 'For growing marketing teams',
     monthlyPrice: 149900, // ₹1,499
     yearlyPrice: 1499000, // ₹14,990
-    trialDays: 14,
+    trialDays: 7,
     isRecommended: true,
     sortOrder: 2,
     marketingFeatures: [
@@ -106,7 +79,7 @@ const PLANS = [
     description: 'Enterprise-grade with unlimited scale',
     monthlyPrice: 499900, // ₹4,999
     yearlyPrice: 4999000, // ₹49,990
-    trialDays: 14,
+    trialDays: 7,
     sortOrder: 3,
     marketingFeatures: [
       '1,000 Dynamic QR Codes',
@@ -147,7 +120,7 @@ async function main() {
         description: planFields.description,
         monthlyPrice: planFields.monthlyPrice,
         yearlyPrice: planFields.yearlyPrice,
-        isFree: planFields.isFree || false,
+        isFree: false,
         isRecommended: (planFields as any).isRecommended || false,
         trialDays: (planFields as any).trialDays || 0,
         sortOrder: planFields.sortOrder,
@@ -159,7 +132,7 @@ async function main() {
         description: planFields.description,
         monthlyPrice: planFields.monthlyPrice,
         yearlyPrice: planFields.yearlyPrice,
-        isFree: planFields.isFree || false,
+        isFree: false,
         isRecommended: (planFields as any).isRecommended || false,
         trialDays: (planFields as any).trialDays || 0,
         sortOrder: planFields.sortOrder,

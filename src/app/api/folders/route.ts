@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUserAndOrg } from '@/lib/get-session-user'
 import { hasPermission } from '@/lib/rbac'
+import { handleApiError } from '@/lib/errors'
 
 export async function GET() {
   try {
@@ -25,8 +26,7 @@ export async function GET() {
 
     return NextResponse.json({ success: true, data: formatted })
   } catch (error) {
-    console.error('GET /api/folders Error:', error)
-    return NextResponse.json({ error: 'Failed to fetch folders' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -35,13 +35,19 @@ export async function POST(req: NextRequest) {
     const { userId, orgId, role } = await getCurrentUserAndOrg()
 
     if (!hasPermission(role, 'folder:write')) {
-      return NextResponse.json({ error: 'Viewers have read-only access and cannot create folders' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Viewers have read-only access' } },
+        { status: 403 }
+      )
     }
 
     const { name, color } = await req.json()
 
     if (!name) {
-      return NextResponse.json({ error: 'Folder name is required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Folder name is required' } },
+        { status: 400 }
+      )
     }
 
     const folder = await db.folder.create({
@@ -55,8 +61,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: folder }, { status: 201 })
   } catch (error) {
-    console.error('POST /api/folders Error:', error)
-    return NextResponse.json({ error: 'Failed to create folder' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -65,13 +70,19 @@ export async function PATCH(req: NextRequest) {
     const { orgId, role } = await getCurrentUserAndOrg()
 
     if (!hasPermission(role, 'folder:write')) {
-      return NextResponse.json({ error: 'Viewers have read-only access and cannot edit folders' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Viewers have read-only access' } },
+        { status: 403 }
+      )
     }
 
     const { id, name, color } = await req.json()
 
     if (!id || !name) {
-      return NextResponse.json({ error: 'Folder ID and name are required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Folder ID and name are required' } },
+        { status: 400 }
+      )
     }
 
     const updated = await db.folder.updateMany({
@@ -80,13 +91,15 @@ export async function PATCH(req: NextRequest) {
     })
 
     if (updated.count === 0) {
-      return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Folder not found' } },
+        { status: 404 }
+      )
     }
 
     return NextResponse.json({ success: true, message: 'Folder updated successfully' })
   } catch (error) {
-    console.error('PATCH /api/folders Error:', error)
-    return NextResponse.json({ error: 'Failed to update folder' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -95,14 +108,20 @@ export async function DELETE(req: NextRequest) {
     const { orgId, role } = await getCurrentUserAndOrg()
 
     if (!hasPermission(role, 'folder:write')) {
-      return NextResponse.json({ error: 'Viewers have read-only access and cannot delete folders' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Viewers have read-only access' } },
+        { status: 403 }
+      )
     }
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
 
     if (!id) {
-      return NextResponse.json({ error: 'Folder ID is required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Folder ID is required' } },
+        { status: 400 }
+      )
     }
 
     await db.folder.deleteMany({
@@ -111,8 +130,6 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Folder deleted' })
   } catch (error) {
-    console.error('DELETE /api/folders Error:', error)
-    return NextResponse.json({ error: 'Failed to delete folder' }, { status: 500 })
+    return handleApiError(error)
   }
 }
-

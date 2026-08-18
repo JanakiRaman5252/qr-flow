@@ -6,6 +6,8 @@ import { requireCapacity } from '@/lib/billing/usage'
 import { getLimit } from '@/lib/billing/entitlements'
 import { BillingError, billingErrorToResponse } from '@/lib/billing/billing-errors'
 import { hasPermission, canManageTargetMember, type Role } from '@/lib/rbac'
+import { handleApiError } from '@/lib/errors'
+import crypto from 'crypto'
 
 export async function GET() {
   try {
@@ -48,8 +50,7 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error('GET /api/team Error:', error)
-    return NextResponse.json({ error: 'Failed to fetch team members' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -59,23 +60,32 @@ export async function POST(req: NextRequest) {
     const { email, role } = await req.json()
 
     if (!email || !email.includes('@')) {
-      return NextResponse.json({ error: 'A valid email address is required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'A valid email address is required' } },
+        { status: 400 }
+      )
     }
 
     // 1. Check actor permissions
     if (!hasPermission(actorRole, 'team:invite')) {
-      return NextResponse.json({ error: 'Only Workspace Owners and Admins can invite team members' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only Workspace Owners and Admins can invite team members' } },
+        { status: 403 }
+      )
     }
 
     const assignedRole: Role = ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'].includes(role) ? role : 'EDITOR'
 
     // Admin cannot invite someone as Owner or Admin
     if (actorRole === 'ADMIN' && (assignedRole === 'OWNER' || assignedRole === 'ADMIN')) {
-      return NextResponse.json({ error: 'Admins can only invite members as Editors or Viewers' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Admins can only invite members as Editors or Viewers' } },
+        { status: 403 }
+      )
     }
 
-    // 2. Billing: check team member capacity quota
-    await requireCapacity(orgId, 'TEAM_MEMBER', 1, 'pro')
+    // 2. Billing: check team member capacity quota (no hardcoded plan recommendation)
+    await requireCapacity(orgId, 'TEAM_MEMBER', 1)
 
     const cleanEmail = email.trim().toLowerCase()
 
@@ -103,7 +113,10 @@ export async function POST(req: NextRequest) {
     })
 
     if (existing) {
-      return NextResponse.json({ error: 'User is already a member of this workspace' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'CONFLICT', message: 'User is already a member of this workspace' } },
+        { status: 409 }
+      )
     }
 
     const member = await db.member.create({
@@ -115,11 +128,25 @@ export async function POST(req: NextRequest) {
       include: { user: true },
     })
 
-    // 5. Send invitation email
+    // 5. Generate secure invitation token
+    const inviteToken = crypto.randomBytes(32).toString('hex')
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+    // Store token in Verification table for single-use + expiry
+    await db.verification.create({
+      data: {
+        identifier: `invite:${cleanEmail}:${orgId}`,
+        value: inviteToken,
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48 hours
+      },
+    })
+
+    // Build secure invite link (token-based, no org/role in URL)
+    const inviteLink = `${appUrl}/accept-invite?token=${inviteToken}`
+
+    // 6. Send invitation email
     let emailSent = false
     let emailWarning: string | undefined = undefined
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const inviteLink = `${appUrl}/accept-invite?email=${encodeURIComponent(cleanEmail)}&workspace=${encodeURIComponent(organization.name)}&orgId=${orgId}&role=${assignedRole}`
 
     try {
       const emailRes = await sendEmail({
@@ -135,7 +162,7 @@ export async function POST(req: NextRequest) {
                 Accept Invitation & Set Password
               </a>
             </p>
-            <p style="color: #64748B; font-size: 12px;">Or copy and paste this link into your browser:<br/>${inviteLink}</p>
+            <p style="color: #64748B; font-size: 12px;">This invitation expires in 48 hours.</p>
           </div>
         `,
       })
@@ -149,7 +176,7 @@ export async function POST(req: NextRequest) {
       emailWarning = emailErr.message || 'Failed to dispatch email'
     }
 
-    // 6. Audit Log
+    // 7. Audit Log
     await db.auditLog.create({
       data: {
         action: 'MEMBER_INVITED',
@@ -164,12 +191,12 @@ export async function POST(req: NextRequest) {
       },
     }).catch(() => {})
 
+    // NOTE: inviteLink is NOT returned in the API response (P2-006 fix)
     return NextResponse.json(
       {
         success: true,
         emailSent,
         emailWarning,
-        inviteLink,
         data: {
           id: member.id,
           userId: member.userId,
@@ -185,8 +212,7 @@ export async function POST(req: NextRequest) {
     if (error instanceof BillingError) {
       return NextResponse.json(billingErrorToResponse(error), { status: error.statusCode })
     }
-    console.error('POST /api/team Error:', error)
-    return NextResponse.json({ error: 'Failed to invite team member' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -196,37 +222,56 @@ export async function PATCH(req: NextRequest) {
     const { id, role } = await req.json()
 
     if (!id || !role) {
-      return NextResponse.json({ error: 'Member ID and Role are required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Member ID and Role are required' } },
+        { status: 400 }
+      )
     }
 
     const validRoles: Role[] = ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER']
     if (!validRoles.includes(role)) {
-      return NextResponse.json({ error: 'Invalid role specified' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid role specified' } },
+        { status: 400 }
+      )
     }
 
     // 1. Check actor permissions
     if (!hasPermission(actorRole, 'team:update_role')) {
-      return NextResponse.json({ error: 'Only Workspace Owners and Admins can update roles' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Only Workspace Owners and Admins can update roles' } },
+        { status: 403 }
+      )
     }
 
+    // Verify target member belongs to same org (tenant isolation)
     const targetMember = await db.member.findFirst({
       where: { id, organizationId: orgId },
       include: { user: true },
     })
 
     if (!targetMember) {
-      return NextResponse.json({ error: 'Member not found in workspace' }, { status: 404 })
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Member not found in workspace' } },
+        { status: 404 }
+      )
     }
 
     // 2. Prevent user from modifying their own role
     if (targetMember.userId === userId) {
-      return NextResponse.json({ error: 'You cannot change your own role' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'You cannot change your own role' } },
+        { status: 400 }
+      )
     }
 
     // 3. Check actor-target management rules
     const managementCheck = canManageTargetMember(actorRole, targetMember.role, role)
     if (!managementCheck.allowed) {
-      return NextResponse.json({ error: managementCheck.reason || 'Unauthorized to modify this member' }, { status: 403 })
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: managementCheck.reason || 'Unauthorized to modify this member' } },
+        { status: 403 }
+      )
     }
 
     // 4. If demoting an OWNER, verify another OWNER exists
@@ -235,7 +280,10 @@ export async function PATCH(req: NextRequest) {
         where: { organizationId: orgId, role: 'OWNER' },
       })
       if (ownerCount <= 1) {
-        return NextResponse.json({ error: 'Workspace must have at least one Owner' }, { status: 400 })
+        return NextResponse.json(
+          { success: false, error: { code: 'VALIDATION_ERROR', message: 'Workspace must have at least one Owner' } },
+          { status: 400 }
+        )
       }
     }
 
@@ -271,8 +319,7 @@ export async function PATCH(req: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('PATCH /api/team Error:', error)
-    return NextResponse.json({ error: 'Failed to update member role' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -283,16 +330,23 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id')
 
     if (!id) {
-      return NextResponse.json({ error: 'Member ID is required' }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Member ID is required' } },
+        { status: 400 }
+      )
     }
 
+    // Tenant isolation: verify member belongs to org
     const targetMember = await db.member.findFirst({
       where: { id, organizationId: orgId },
       include: { user: true },
     })
 
     if (!targetMember) {
-      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Member not found' } },
+        { status: 404 }
+      )
     }
 
     const isSelfRemoval = targetMember.userId === userId
@@ -300,12 +354,18 @@ export async function DELETE(req: NextRequest) {
     // If removing someone else, check permissions
     if (!isSelfRemoval) {
       if (!hasPermission(actorRole, 'team:remove')) {
-        return NextResponse.json({ error: 'Only Workspace Owners and Admins can remove members' }, { status: 403 })
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: 'Only Workspace Owners and Admins can remove members' } },
+          { status: 403 }
+        )
       }
 
       const managementCheck = canManageTargetMember(actorRole, targetMember.role)
       if (!managementCheck.allowed) {
-        return NextResponse.json({ error: managementCheck.reason || 'Unauthorized to remove this member' }, { status: 403 })
+        return NextResponse.json(
+          { success: false, error: { code: 'FORBIDDEN', message: managementCheck.reason || 'Unauthorized to remove this member' } },
+          { status: 403 }
+        )
       }
     }
 
@@ -315,7 +375,10 @@ export async function DELETE(req: NextRequest) {
         where: { organizationId: orgId, role: 'OWNER' },
       })
       if (ownerCount <= 1) {
-        return NextResponse.json({ error: 'Cannot remove the primary/sole Owner of the workspace' }, { status: 400 })
+        return NextResponse.json(
+          { success: false, error: { code: 'VALIDATION_ERROR', message: 'Cannot remove the primary/sole Owner of the workspace' } },
+          { status: 400 }
+        )
       }
     }
 
@@ -343,7 +406,6 @@ export async function DELETE(req: NextRequest) {
       message: isSelfRemoval ? 'You have left the workspace' : 'Member removed from workspace',
     })
   } catch (error) {
-    console.error('DELETE /api/team Error:', error)
-    return NextResponse.json({ error: 'Failed to remove member' }, { status: 500 })
+    return handleApiError(error)
   }
 }

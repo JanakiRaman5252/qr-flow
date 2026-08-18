@@ -103,6 +103,8 @@ model Member {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
 }
 
 model QRCode {
@@ -142,6 +144,9 @@ model QRCode {
   versions        QRVersion[]
   scans           ScanEvent[]
   tags            TagOnQR[]
+
+  @@index([organizationId, isInTrash])
+  @@index([organizationId, createdAt])
 }
 
 model QRVersion {
@@ -211,6 +216,9 @@ model ScanEvent {
   isUnique    Boolean  @default(true)
   isReturning Boolean  @default(false)
   qrCode      QRCode   @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  @@index([qrCodeId, timestamp])
+  @@index([qrCodeId, country])
 }
 
 // ─────────────────────────────────────────────
