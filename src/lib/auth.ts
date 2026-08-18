@@ -44,7 +44,8 @@ export const auth = betterAuth({
       console.log(`[VERIFICATION LINK] ${url}`)
       console.log(`========================================\n`)
 
-      const emailResult = await sendEmail({
+      // Dispatch sendEmail asynchronously so the API route returns instantly (no 500 timeouts)
+      sendEmail({
         to: user.email,
         subject: 'Verify your email address - QRFlow',
         html: `
@@ -63,11 +64,14 @@ export const auth = betterAuth({
           </div>
         `,
       })
-
-      if (!emailResult.success) {
-        console.error('[sendEmail Error]:', emailResult.error)
-        throw new Error(emailResult.error || 'Failed to deliver verification email')
-      }
+        .then((res) => {
+          if (!res.success) {
+            console.error('[Verification Email Delivery Notice]:', res.error)
+          }
+        })
+        .catch((err) => {
+          console.error('[Verification Email Delivery Exception]:', err)
+        })
     },
   },
   socialProviders: {

@@ -267,7 +267,7 @@ export default function SignupPage() {
                     </>
                   ) : (
                     <>
-                      <span>Start 7-Day Free Trial</span>
+                      <span suppressHydrationWarning>Start 7-Day Free Trial</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

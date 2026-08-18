@@ -25,25 +25,31 @@ export async function sendEmail({
   }
 
   try {
-    const result = await resend.emails.send({
+    const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) =>
+      setTimeout(() => resolve({ success: false, error: 'Email service request timed out after 8s' }), 8000)
+    )
+
+    const sendPromise = resend.emails.send({
       from: fromAddress,
       to,
       subject,
       html,
+    }).then((result) => {
+      if (result.error) {
+        console.error('[Resend Error]:', result.error.message || result.error)
+        if (result.error.message?.includes('testing emails')) {
+          console.warn('\n[Resend Domain Restriction Notice]:')
+          console.warn('Resend free onboarding address (onboarding@resend.dev) can only send emails to the account owner.')
+          console.warn('To send real emails to any address, add and verify your custom domain at https://resend.com/domains')
+          console.warn('and set EMAIL_FROM="QRFlow <noreply@yourdomain.com>" in your .env file.\n')
+        }
+        return { success: false, error: result.error.message }
+      }
+      return { success: true, id: result.data?.id }
     })
 
-    if (result.error) {
-      console.error('[Resend Error]:', result.error.message || result.error)
-      if (result.error.message?.includes('testing emails')) {
-        console.warn('\n[Resend Domain Restriction Notice]:')
-        console.warn('Resend free onboarding address (onboarding@resend.dev) can only send emails to the account owner.')
-        console.warn('To send real emails to any address, add and verify your custom domain at https://resend.com/domains')
-        console.warn('and set EMAIL_FROM="QRFlow <noreply@yourdomain.com>" in your .env file.\n')
-      }
-      return { success: false, error: result.error.message }
-    }
-
-    return { success: true, id: result.data?.id }
+    const result = await Promise.race([sendPromise, timeoutPromise])
+    return result
   } catch (err: any) {
     console.error('[sendEmail Exception]:', err)
     return { success: false, error: err.message || 'Email delivery failed' }
