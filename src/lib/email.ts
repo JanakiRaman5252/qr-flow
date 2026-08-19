@@ -11,15 +11,17 @@ export async function sendEmail({
   subject: string
   html: string
 }) {
+  const cleanTo = to.trim().toLowerCase()
+
   if (!process.env.RESEND_API_KEY) {
-    console.log(`[Email Mock] To: ${to} | Subject: ${subject}`)
+    console.log(`[Email Mock] To: ${cleanTo} | Subject: ${subject}`)
     return { success: true, id: 'mock_id' }
   }
 
   // Use configured EMAIL_FROM or default to Resend onboarding address
   let fromAddress = process.env.EMAIL_FROM || 'QRFlow <onboarding@resend.dev>'
-  
-  // Resend requires custom domain verification. Fallback .vercel.app or .io to onboarding@resend.dev unless explicitly verified
+
+  // Resend requires custom domain verification. Fallback to onboarding@resend.dev if vercel/demo domains
   if (fromAddress.includes('.vercel.app') || (fromAddress.includes('@qrflow.io') && process.env.NODE_ENV !== 'production')) {
     fromAddress = 'QRFlow <onboarding@resend.dev>'
   }
@@ -31,12 +33,12 @@ export async function sendEmail({
 
     const sendPromise = resend.emails.send({
       from: fromAddress,
-      to,
+      to: cleanTo,
       subject,
       html,
     }).then((result) => {
       if (result.error) {
-        console.error('[Resend Error]:', result.error.message || result.error)
+        console.error('[Resend Delivery Error]:', result.error.message || result.error)
         if (result.error.message?.includes('testing emails')) {
           console.warn('\n[Resend Domain Restriction Notice]:')
           console.warn('Resend free onboarding address (onboarding@resend.dev) can only send emails to the account owner.')
@@ -45,6 +47,7 @@ export async function sendEmail({
         }
         return { success: false, error: result.error.message }
       }
+      console.log(`[Resend Email Dispatched]: Message ID ${result.data?.id} sent to ${cleanTo}`)
       return { success: true, id: result.data?.id }
     })
 

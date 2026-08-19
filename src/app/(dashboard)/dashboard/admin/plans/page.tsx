@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react'
 import { Plus, Edit2, Loader2, RefreshCw } from 'lucide-react'
-import { formatPrice } from '@/lib/billing/plans'
+import { formatPrice } from '@/lib/billing/formatters'
+import { PageLoader } from '@/components/ui/loader'
 
 export default function AdminPlansPage() {
   const [plans, setPlans] = useState<any[]>([])
@@ -201,7 +202,10 @@ export default function AdminPlansPage() {
         </form>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {isLoading ? (
+        <PageLoader text="Loading Admin Billing Plans" subtext="Fetching subscription tiers, prices, and entitlements" />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {plans.map((p) => (
           <div
             key={p.id}
@@ -242,6 +246,7 @@ export default function AdminPlansPage() {
           </div>
         ))}
       </div>
+      )}
     </div>
   )
 }

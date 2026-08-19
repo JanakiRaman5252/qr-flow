@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { QrCode, Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
+import { ButtonSpinner } from '@/components/ui/loader'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -32,7 +33,6 @@ export default function SignupPage() {
       name,
       email,
       password,
-      callbackURL: '/dashboard',
     })
 
     if (result.error) {
@@ -262,7 +262,7 @@ export default function SignupPage() {
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <ButtonSpinner className="w-4 h-4 text-white" />
                       <span>Creating account...</span>
                     </>
                   ) : (

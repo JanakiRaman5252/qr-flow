@@ -16,6 +16,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageLoader } from '@/components/ui/loader'
 
 interface ProfileData {
   id: string
@@ -42,6 +43,7 @@ interface CustomDomainData {
 
 export default function SettingsPage() {
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [customDomain, setCustomDomain] = useState<CustomDomainData | null>(null)
   const [hasDomainEntitlement, setHasDomainEntitlement] = useState(false)
@@ -116,6 +118,7 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
+    setMounted(true)
     loadSettingsData()
   }, [])
 
@@ -315,20 +318,10 @@ export default function SettingsPage() {
     }
   }
 
-  if (isLoading) {
+  if (!mounted || isLoading) {
     return (
-      <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
-        <div className="space-y-3">
-          <Skeleton className="h-8 w-64 rounded-lg" />
-          <Skeleton className="h-4 w-96 max-w-full rounded-md" />
-        </div>
-
-        <div className="space-y-6 max-w-3xl">
-          <Skeleton className="h-48 rounded-3xl" />
-          <Skeleton className="h-48 rounded-3xl" />
-          <Skeleton className="h-40 rounded-3xl" />
-          <Skeleton className="h-64 rounded-3xl" />
-        </div>
+      <div suppressHydrationWarning className="p-4 sm:p-6 md:p-8 flex items-center justify-center min-h-[80vh] bg-slate-950 text-slate-50 w-full max-w-full">
+        <PageLoader text="Loading Settings & Security Configuration" subtext="Fetching custom domain setup, workspace preferences, and 2FA status" />
       </div>
     )
   }

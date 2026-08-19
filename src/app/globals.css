@@ -1,10 +1,16 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+
   --color-brand: oklch(62% 0.18 264);
   --color-brand-muted: oklch(62% 0.18 264 / 0.1);
 }
+
+/* =========================================================
+   Base
+   ========================================================= */
 
 * {
   box-sizing: border-box;
@@ -13,12 +19,31 @@
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
 }
+
+body {
+  min-height: 100vh;
+  background: #020617;
+  color: #f8fafc;
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* =========================================================
+   Selection
+   ========================================================= */
 
 ::selection {
   background-color: oklch(62% 0.18 264 / 0.35);
   color: white;
 }
+
+/* =========================================================
+   Scrollbar
+   ========================================================= */
 
 ::-webkit-scrollbar {
   width: 6px;
@@ -30,13 +55,23 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(40% 0 0);
-  border-radius: 100px;
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(55% 0 0);
+  background: rgba(148, 163, 184, 0.65);
 }
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
+}
+
+/* =========================================================
+   Focus
+   ========================================================= */
 
 :focus-visible {
   outline: 2px solid oklch(62% 0.18 264);
@@ -44,22 +79,145 @@ html {
   border-radius: 4px;
 }
 
-@keyframes shimmer {
+/* =========================================================
+   Loader Animations & Visual Effects
+   ========================================================= */
+
+@keyframes spin-reverse {
   0% {
-    background-position: -200% 0;
+    transform: rotate(360deg);
   }
   100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.96);
+    filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.4));
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 24px rgba(168, 85, 247, 0.8));
+  }
+}
+
+@keyframes scan-beam {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.animate-spin-reverse {
+  animation: spin-reverse 2.5s linear infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-scan-beam {
+  animation: scan-beam 2s ease-in-out infinite;
+}
+
+/* =========================================================
+   Skeleton / Loading Shimmer
+   ========================================================= */
+
+@keyframes shimmer {
+  0% {
     background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
   }
 }
 
 .animate-shimmer {
+  position: relative;
+  overflow: hidden;
   background: linear-gradient(
     90deg,
-    rgba(15, 23, 42, 0.8) 0%,
-    rgba(51, 65, 85, 0.5) 50%,
-    rgba(15, 23, 42, 0.8) 100%
+    rgba(30, 41, 59, 0.55) 0%,
+    rgba(51, 65, 85, 0.75) 45%,
+    rgba(71, 85, 105, 0.65) 50%,
+    rgba(51, 65, 85, 0.75) 55%,
+    rgba(30, 41, 59, 0.55) 100%
   );
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite ease-in-out;
+  background-size: 250% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+
+  background: linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.5) 0%,
+    rgba(30, 41, 59, 0.65) 35%,
+    rgba(71, 85, 105, 0.7) 50%,
+    rgba(30, 41, 59, 0.65) 65%,
+    rgba(30, 41, 59, 0.5) 100%
+  );
+
+  background-size: 250% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* =========================================================
+   Reduced Motion
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-shimmer,
+  .skeleton-shimmer,
+  .animate-spin-reverse,
+  .animate-pulse-glow,
+  .animate-scan-beam {
+    animation: none;
+  }
+}
+
+/* =========================================================
+   Utility Classes
+   ========================================================= */
+
+.glass {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.card-premium {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.border-subtle {
+  border-color: rgba(148, 163, 184, 0.08);
 }

@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Check, Sparkles, Clock } from 'lucide-react'
-import { formatPrice } from '@/lib/billing/plans'
+import { formatPrice } from '@/lib/billing/formatters'
 
 interface PlanCardProps {
   plan: {

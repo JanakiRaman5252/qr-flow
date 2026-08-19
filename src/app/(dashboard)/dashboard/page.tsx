@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { QrCode, Plus, TrendingUp, BarChart2, Eye, Globe, ArrowUpRight, Loader2 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageLoader } from '@/components/ui/loader'
 
 interface StatsData {
   totalScans: number
@@ -23,10 +24,12 @@ interface StatsData {
 }
 
 export default function DashboardPage() {
+  const [mounted, setMounted] = useState(false)
   const [stats, setStats] = useState<StatsData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    setMounted(true)
     async function fetchStats() {
       try {
         const res = await fetch('/api/dashboard/stats')
@@ -44,7 +47,7 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
+    <div suppressHydrationWarning className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -65,50 +68,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-8">
-          {/* Metrics Row Skeleton */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <Skeleton className="h-3.5 w-24 rounded-md" />
-                  <Skeleton className="w-8 h-8 rounded-xl" />
-                </div>
-                <Skeleton className="h-8 w-20 rounded-lg" />
-                <Skeleton className="h-3 w-32 rounded-md" />
-              </div>
-            ))}
-          </div>
-
-          {/* Activity / Quick Actions Skeleton */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 p-6 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-4">
-              <div className="flex justify-between items-center">
-                <Skeleton className="h-5 w-40 rounded-md" />
-                <Skeleton className="h-4 w-20 rounded-md" />
-              </div>
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center justify-between p-3.5 rounded-xl border border-slate-800/60">
-                  <div className="flex items-center space-x-3">
-                    <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-36 rounded-md" />
-                      <Skeleton className="h-3 w-48 rounded-md" />
-                    </div>
-                  </div>
-                  <Skeleton className="h-6 w-16 rounded-md" />
-                </div>
-              ))}
-            </div>
-
-            <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-4">
-              <Skeleton className="h-5 w-32 rounded-md" />
-              <Skeleton className="h-28 w-full rounded-xl" />
-              <Skeleton className="h-10 w-full rounded-xl" />
-            </div>
-          </div>
-        </div>
+      {!mounted || isLoading ? (
+        <PageLoader text="Loading Dashboard Overview" subtext="Fetching realtime scan analytics, team quotas, and recent QR codes" />
       ) : (
         <>
           {/* Metrics Row */}

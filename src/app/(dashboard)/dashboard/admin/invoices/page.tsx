@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { formatPrice } from '@/lib/billing/plans'
-import { Loader2 } from 'lucide-react'
+import { formatPrice } from '@/lib/billing/formatters'
+import { PageLoader } from '@/components/ui/loader'
 
 export default function AdminInvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([])
@@ -26,9 +26,8 @@ export default function AdminInvoicesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center space-x-2 text-slate-400">
-        <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-        <span className="text-xs">Loading invoices...</span>
+      <div className="p-4 sm:p-6 md:p-8 space-y-6 bg-slate-950 text-slate-50 min-h-screen">
+        <PageLoader text="Loading Admin Invoices" subtext="Fetching invoice numbers, statuses, and payment records" />
       </div>
     )
   }

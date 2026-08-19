@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { QrCode, CheckCircle2, XCircle, Loader2, ArrowRight, Mail } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
+import { PulseLoader } from '@/components/ui/loader'
 
 function VerifyEmailContent() {
   const router = useRouter()
@@ -52,15 +53,7 @@ function VerifyEmailContent() {
   return (
     <div className="bg-slate-900/80 backdrop-blur-xl py-8 px-6 shadow-2xl border border-slate-800 rounded-2xl sm:px-10 text-center space-y-6">
       {status === 'loading' && (
-        <div className="space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-            <Loader2 className="w-8 h-8 animate-spin" />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold text-white mb-1">Verifying your email...</h3>
-            <p className="text-sm text-slate-400">Please wait while we validate your activation token.</p>
-          </div>
-        </div>
+        <PulseLoader text="Verifying your email..." subtext="Validating activation token and initializing session" />
       )}
 
       {status === 'success' && (

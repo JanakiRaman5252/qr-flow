@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { formatPrice } from '@/lib/billing/plans'
+import { formatPrice } from '@/lib/billing/formatters'
 import { CreditCard, ExternalLink, Download } from 'lucide-react'
 
 interface PaymentItem {

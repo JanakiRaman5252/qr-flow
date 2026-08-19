@@ -1,6 +1,7 @@
 import React from 'react'
 import Link from 'next/link'
-import { getActivePlans, formatPrice } from '@/lib/billing/plans'
+import { getActivePlans } from '@/lib/billing/plans'
+import { formatPrice } from '@/lib/billing/formatters'
 import { Check, Sparkles, ArrowRight } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'

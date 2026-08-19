@@ -11,6 +11,7 @@ import {
   Check,
 } from 'lucide-react'
 import QRCodeLib from 'qrcode'
+import { PulseLoader, ButtonSpinner } from '@/components/ui/loader'
 import {
   DEFAULT_QR_DESIGN,
   type QRDesignConfig,
@@ -158,8 +159,8 @@ export function QRPreviewCanvas({
         />
 
         {isRendering && (
-          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center rounded-3xl">
-            <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center rounded-3xl z-20">
+            <PulseLoader size="sm" />
           </div>
         )}
       </div>
@@ -174,7 +175,7 @@ export function QRPreviewCanvas({
             className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/25 transition-all disabled:opacity-60"
           >
             {downloadingFormat === 'png' ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <ButtonSpinner className="w-4 h-4 text-white" />
             ) : (
               <Download className="w-4 h-4" />
             )}

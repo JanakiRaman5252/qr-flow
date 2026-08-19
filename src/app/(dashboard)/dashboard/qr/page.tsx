@@ -7,6 +7,7 @@ import { Plus, Search, QrCode, ExternalLink, Download, Trash2, Copy, BarChart3, 
 import { QRDownloadModal } from '@/components/qr/qr-download-modal'
 import { QROrganizeModal } from '@/components/qr/qr-organize-modal'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageLoader } from '@/components/ui/loader'
 
 interface FolderItem {
   id: string
@@ -236,14 +237,8 @@ function QRListContent() {
         </div>
       )}
 
-      {/* QR List Skeleton */}
       {isLoading ? (
-        <div className="space-y-4">
-          <Skeleton className="h-20 rounded-2xl" />
-          <Skeleton className="h-20 rounded-2xl" />
-          <Skeleton className="h-20 rounded-2xl" />
-          <Skeleton className="h-20 rounded-2xl" />
-        </div>
+        <PageLoader text="Loading Dynamic QR Codes" subtext="Fetching workspace codes, custom designs, folders, and tags" />
       ) : (
         <div className="space-y-3">
           {codes.length === 0 ? (

@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react'
 import { SubscriptionStatusBadge } from '@/components/billing/SubscriptionStatus'
-import { formatPrice } from '@/lib/billing/plans'
+import { formatPrice } from '@/lib/billing/formatters'
 import { Loader2, Search, Filter, Users, ShieldCheck, DollarSign, Calendar, CreditCard } from 'lucide-react'
+import { PageLoader } from '@/components/ui/loader'
 
 export default function AdminSubscriptionsPage() {
   const [data, setData] = useState<any>(null)
@@ -110,10 +111,7 @@ export default function AdminSubscriptionsPage() {
 
       {/* Tenant Purchases Table */}
       {isLoading ? (
-        <div className="flex h-64 items-center justify-center space-x-2 text-slate-400">
-          <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-          <span className="text-xs font-medium">Loading tenant purchase records...</span>
-        </div>
+        <PageLoader text="Loading Tenant Subscriptions" subtext="Fetching active subscriptions, recurring billing, and workspace plans" />
       ) : items.length === 0 ? (
         <div className="p-12 rounded-3xl border border-slate-800 bg-slate-900/60 text-center space-y-2">
           <Users className="w-8 h-8 text-slate-600 mx-auto" />

@@ -502,31 +502,19 @@ export async function scheduleDowngrade(
 // ── Trial ───────────────────────────────────
 
 /** Check if a tenant has already used a trial (any plan) */
-export async function hasUsedTrial(tenantId: string, planId?: string): Promise<boolean> {
+export async function hasUsedTrial(tenantId: string, _planId?: string): Promise<boolean> {
   const sub = await db.subscription.findUnique({
     where: { organizationId: tenantId },
   })
   if (!sub) return false
 
   // Check for any past TRIAL_STARTED event for this tenant
-  const query: any = {
-    subscriptionId: sub.id,
-    eventType: BILLING_EVENTS.TRIAL_STARTED,
-  }
-
-  // If a specific planId is provided, check for that plan only
-  if (planId) {
-    // We store planId in the newState metadata
-    const events = await db.subscriptionEvent.findMany({
-      where: query,
-    })
-    return events.some((e: any) => {
-      const state = e.newState as any
-      return state?.planId === planId
-    })
-  }
-
-  const count = await db.subscriptionEvent.count({ where: query })
+  const count = await db.subscriptionEvent.count({
+    where: {
+      subscriptionId: sub.id,
+      eventType: BILLING_EVENTS.TRIAL_STARTED,
+    },
+  })
   return count > 0
 }
 
@@ -542,26 +530,28 @@ export async function getTrialEligibility(tenantId: string) {
     include: { plan: true },
   })
 
-  // Can't trial if already on a paid plan or already trialing
-  const isOnPaidPlan = sub && !sub.plan?.isFree && ['ACTIVE', 'TRIALING'].includes(sub.status)
-
-  const results = await Promise.all(
-    plans.map(async (plan) => {
-      const used = await hasUsedTrial(tenantId, plan.id)
-      return {
-        planId: plan.id,
-        planSlug: plan.slug,
-        planName: plan.name,
-        trialDays: plan.trialDays,
-        canTrial: !used && !isOnPaidPlan,
-        reason: used
-          ? 'Trial already used for this plan'
-          : isOnPaidPlan
-            ? 'Already on a paid or trialing subscription'
-            : null,
-      }
-    })
+  // Free trial is a one-time feature from account creation.
+  // Once a trial is started (at signup) or a plan is purchased/expired, trial eligibility is false for all plans.
+  const usedAnyTrial = await hasUsedTrial(tenantId)
+  const isPaidOrTrialing = Boolean(
+    sub &&
+      (['ACTIVE', 'TRIALING', 'PAST_DUE', 'EXPIRED', 'CANCELED'].includes(sub.status) || !sub.plan?.isFree)
   )
+
+  const canTrial = !usedAnyTrial && !isPaidOrTrialing
+
+  const results = plans.map((plan) => {
+    return {
+      planId: plan.id,
+      planSlug: plan.slug,
+      planName: plan.name,
+      trialDays: plan.trialDays,
+      canTrial,
+      reason: usedAnyTrial || isPaidOrTrialing
+        ? 'One-time free trial already claimed upon account creation'
+        : null,
+    }
+  })
 
   return results
 }

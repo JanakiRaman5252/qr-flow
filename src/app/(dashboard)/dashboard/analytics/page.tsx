@@ -16,6 +16,7 @@ import { DeviceDonutChart } from '@/components/analytics/DeviceDonutChart'
 import { BreakdownCard } from '@/components/analytics/BreakdownCard'
 import { TopQRCodesCard } from '@/components/analytics/TopQRCodesCard'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageLoader } from '@/components/ui/loader'
 
 function DownloadIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -179,25 +180,7 @@ export default function AnalyticsDashboardPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-8">
-          {/* Summary Cards Skeleton */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Skeleton className="h-28 rounded-2xl" />
-            <Skeleton className="h-28 rounded-2xl" />
-            <Skeleton className="h-28 rounded-2xl" />
-            <Skeleton className="h-28 rounded-2xl" />
-          </div>
-
-          {/* Main Chart Skeleton */}
-          <Skeleton className="h-80 rounded-3xl" />
-
-          {/* Breakdown Cards Skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Skeleton className="h-64 rounded-2xl" />
-            <Skeleton className="h-64 rounded-2xl" />
-            <Skeleton className="h-64 rounded-2xl" />
-          </div>
-        </div>
+        <PageLoader text="Processing Analytics & Telemetry" subtext="Aggregating scan volumes, device breakdowns, and geolocation insights" />
       ) : (
         <>
           {/* Top Key Metrics Strip */}

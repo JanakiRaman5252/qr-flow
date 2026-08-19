@@ -23,6 +23,7 @@ import {
   Check,
 } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
+import { ButtonSpinner } from '@/components/ui/loader'
 
 const baseNavItems = [
   {
@@ -706,7 +707,7 @@ export function DashboardSidebar() {
             className="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-slate-800/80 hover:bg-rose-500/10 hover:text-rose-400 text-slate-300 text-xs font-semibold border border-slate-700/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoggingOut ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <ButtonSpinner className="w-3.5 h-3.5 text-rose-400" />
             ) : (
               <LogOut className="w-3.5 h-3.5" />
             )}

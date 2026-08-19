@@ -19,8 +19,9 @@ import { BillingCycleToggle } from '@/components/billing/BillingCycleToggle'
 import { PlanCard } from '@/components/billing/PlanCard'
 import { PaymentHistory } from '@/components/billing/PaymentHistory'
 import { TrialBanner } from '@/components/billing/TrialBanner'
-import { formatPrice } from '@/lib/billing/plans'
+import { formatPrice } from '@/lib/billing/formatters'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageLoader } from '@/components/ui/loader'
 
 declare global {
   interface Window {
@@ -38,6 +39,7 @@ interface TrialEligibility {
 }
 
 export default function BillingPage() {
+  const [mounted, setMounted] = useState(false)
   const [subscription, setSubscription] = useState<any>(null)
   const [plans, setPlans] = useState<any[]>([])
   const [usage, setUsage] = useState<any[]>([])
@@ -51,6 +53,7 @@ export default function BillingPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
 
   useEffect(() => {
+    setMounted(true)
     // Load Razorpay Checkout SDK
     const script = document.createElement('script')
     script.src = 'https://checkout.razorpay.com/v1/checkout.js'
@@ -272,85 +275,10 @@ export default function BillingPage() {
     }
   }
 
-  if (isLoading) {
+  if (!mounted || isLoading) {
     return (
-      <div className="p-4 sm:p-6 md:p-8 space-y-8 sm:space-y-10 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
-        {/* Header Skeleton */}
-        <div className="space-y-3">
-          <Skeleton className="h-8 w-56 rounded-lg" />
-          <Skeleton className="h-4 w-96 max-w-full rounded-md" />
-        </div>
-
-        {/* Trial Banner Skeleton */}
-        <div className="rounded-2xl border border-indigo-500/20 bg-slate-900/40 p-5 backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-3 w-full sm:w-auto">
-            <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
-            <div className="space-y-2 flex-1">
-              <Skeleton className="h-4 w-40 rounded-md" />
-              <Skeleton className="h-3 w-64 max-w-full rounded-md" />
-            </div>
-          </div>
-          <Skeleton className="h-10 w-32 rounded-xl shrink-0" />
-        </div>
-
-        {/* Current Active Plan Overview Card Skeleton */}
-        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 p-8 backdrop-blur-xl space-y-6 relative overflow-hidden">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-4 flex-1">
-              <div className="flex items-center space-x-3">
-                <Skeleton className="h-3.5 w-36 rounded-md" />
-                <Skeleton className="h-5 w-36 rounded-full" />
-              </div>
-              <div className="flex items-baseline space-x-3">
-                <Skeleton className="h-9 w-44 rounded-lg" />
-                <Skeleton className="h-6 w-28 rounded-md" />
-              </div>
-              <Skeleton className="h-4 w-80 max-w-full rounded-md" />
-              <Skeleton className="h-10 w-72 rounded-xl mt-2" />
-            </div>
-            <Skeleton className="h-12 w-36 rounded-xl" />
-          </div>
-        </div>
-
-        {/* Real-time Usage & Quota Cards Skeleton */}
-        <div className="space-y-4">
-          <Skeleton className="h-6 w-36 rounded-md" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <Skeleton className="h-4 w-32 rounded-md" />
-                  <Skeleton className="w-9 h-9 rounded-xl" />
-                </div>
-                <Skeleton className="h-7 w-24 rounded-lg" />
-                <Skeleton className="h-2.5 w-full rounded-full" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Available Upgrade Plans Grid Skeleton */}
-        <div className="space-y-6">
-          <Skeleton className="h-6 w-48 rounded-md" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-3xl border border-slate-800/90 bg-slate-900/50 p-8 space-y-6">
-                <div className="space-y-2">
-                  <Skeleton className="h-6 w-28 rounded-md" />
-                  <Skeleton className="h-3.5 w-48 rounded-md" />
-                </div>
-                <Skeleton className="h-10 w-36 rounded-lg" />
-                <Skeleton className="h-11 w-full rounded-xl" />
-                <div className="space-y-3 pt-4 border-t border-slate-800/60">
-                  <Skeleton className="h-4 w-full rounded-md" />
-                  <Skeleton className="h-4 w-5/6 rounded-md" />
-                  <Skeleton className="h-4 w-4/6 rounded-md" />
-                  <Skeleton className="h-4 w-5/6 rounded-md" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      <div suppressHydrationWarning className="p-4 sm:p-6 md:p-8 flex items-center justify-center min-h-[80vh] bg-slate-950 text-slate-50 w-full max-w-full">
+        <PageLoader text="Loading Billing & Subscriptions" subtext="Fetching plan entitlements, quota limits, and payment history" />
       </div>
     )
   }
@@ -366,7 +294,7 @@ export default function BillingPage() {
   const trialMap = new Map(trialEligibility.map((t) => [t.planId, t]))
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 space-y-8 sm:space-y-10 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
+    <div suppressHydrationWarning className="p-4 sm:p-6 md:p-8 space-y-8 sm:space-y-10 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
       {/* Top Banner & Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
