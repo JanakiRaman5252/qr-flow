@@ -64,6 +64,14 @@ export async function getCurrentUserAndOrg(): Promise<SessionUserAndOrg> {
       include: { members: true },
     })
 
+    // Auto-create 7-Day Starter Free Trial subscription for new account
+    try {
+      const { createTrialSubscription } = await import('@/lib/billing/subscription')
+      await createTrialSubscription(org.id)
+    } catch (err) {
+      console.error('[Onboarding] Failed to create 7-day trial subscription:', err)
+    }
+
     return {
       userId: user.id,
       user,

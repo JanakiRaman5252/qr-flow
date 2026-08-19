@@ -16,8 +16,8 @@ export function TrialBanner({ planName, trialEnd, onUpgrade }: TrialBannerProps)
   const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
   const hoursLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60)))
 
-  // Calculate progress (assume max 14-day trial)
-  const totalTrialDays = 14
+  // Calculate progress (max 7-day trial)
+  const totalTrialDays = 7
   const elapsed = totalTrialDays - daysLeft
   const progress = Math.min(100, Math.max(0, (elapsed / totalTrialDays) * 100))
 

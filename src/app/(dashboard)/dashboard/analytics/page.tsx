@@ -15,6 +15,7 @@ import { AnalyticsAreaChart } from '@/components/analytics/AnalyticsAreaChart'
 import { DeviceDonutChart } from '@/components/analytics/DeviceDonutChart'
 import { BreakdownCard } from '@/components/analytics/BreakdownCard'
 import { TopQRCodesCard } from '@/components/analytics/TopQRCodesCard'
+import { Skeleton } from '@/components/ui/skeleton'
 
 function DownloadIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -178,9 +179,24 @@ export default function AnalyticsDashboardPage() {
       </div>
 
       {isLoading ? (
-        <div className="py-32 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-          <span className="text-sm font-semibold text-slate-400">Processing live scan analytics...</span>
+        <div className="space-y-8">
+          {/* Summary Cards Skeleton */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Skeleton className="h-28 rounded-2xl" />
+            <Skeleton className="h-28 rounded-2xl" />
+            <Skeleton className="h-28 rounded-2xl" />
+            <Skeleton className="h-28 rounded-2xl" />
+          </div>
+
+          {/* Main Chart Skeleton */}
+          <Skeleton className="h-80 rounded-3xl" />
+
+          {/* Breakdown Cards Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Skeleton className="h-64 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+          </div>
         </div>
       ) : (
         <>

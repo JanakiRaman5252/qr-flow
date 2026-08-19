@@ -39,21 +39,24 @@ export async function GET(
     const cachedData = await redis.get<CachedQR | string>(`qr:short:${shortCode}`)
 
     if (cachedData) {
-      // Handle both old string cache format and new object format
+      // Handle both stringified JSON object, raw URL string, or object format
       let qrData: CachedQR
       if (typeof cachedData === 'string') {
-        // Legacy: cache only stored the URL
-        qrData = {
-          destinationUrl: cachedData,
-          isArchived: false,
-          isInTrash: false,
-          expiresAt: null,
-          startsAt: null,
-          maxScans: null,
-          scanCount: 0,
+        try {
+          qrData = JSON.parse(cachedData)
+        } catch {
+          // Legacy: cache only stored the raw URL
+          qrData = {
+            destinationUrl: cachedData,
+            isArchived: false,
+            isInTrash: false,
+            expiresAt: null,
+            startsAt: null,
+            maxScans: null,
+            scanCount: 0,
+          }
+          await redis.del(`qr:short:${shortCode}`)
         }
-        // Invalidate legacy cache entry — will be repopulated with full data on next miss
-        await redis.del(`qr:short:${shortCode}`)
       } else {
         qrData = cachedData
       }

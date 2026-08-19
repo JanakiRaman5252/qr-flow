@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { QrCode, Plus, TrendingUp, BarChart2, Eye, Globe, ArrowUpRight, Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface StatsData {
   totalScans: number
@@ -65,9 +66,48 @@ export default function DashboardPage() {
       </div>
 
       {isLoading ? (
-        <div className="py-24 text-center text-slate-500 flex items-center justify-center gap-2 font-medium">
-          <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
-          <span>Fetching live metrics from database...</span>
+        <div className="space-y-8">
+          {/* Metrics Row Skeleton */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-3.5 w-24 rounded-md" />
+                  <Skeleton className="w-8 h-8 rounded-xl" />
+                </div>
+                <Skeleton className="h-8 w-20 rounded-lg" />
+                <Skeleton className="h-3 w-32 rounded-md" />
+              </div>
+            ))}
+          </div>
+
+          {/* Activity / Quick Actions Skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 p-6 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-4">
+              <div className="flex justify-between items-center">
+                <Skeleton className="h-5 w-40 rounded-md" />
+                <Skeleton className="h-4 w-20 rounded-md" />
+              </div>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between p-3.5 rounded-xl border border-slate-800/60">
+                  <div className="flex items-center space-x-3">
+                    <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-36 rounded-md" />
+                      <Skeleton className="h-3 w-48 rounded-md" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-6 w-16 rounded-md" />
+                </div>
+              ))}
+            </div>
+
+            <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-4">
+              <Skeleton className="h-5 w-32 rounded-md" />
+              <Skeleton className="h-28 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+            </div>
+          </div>
         </div>
       ) : (
         <>

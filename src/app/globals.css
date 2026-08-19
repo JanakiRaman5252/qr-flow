@@ -43,3 +43,23 @@ html {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.8) 0%,
+    rgba(51, 65, 85, 0.5) 50%,
+    rgba(15, 23, 42, 0.8) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite ease-in-out;
+}

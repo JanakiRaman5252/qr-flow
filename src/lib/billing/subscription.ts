@@ -29,28 +29,67 @@ export async function getActiveSubscription(tenantId: string) {
 
 /** Auto-assign a 7-day trial on the default plan (Starter) for new tenants */
 export async function createTrialSubscription(tenantId: string): Promise<Subscription> {
-  // Find the default trial plan (lowest-priced active paid plan)
-  const trialPlan = await db.plan.findFirst({
+  // Find the default trial plan (Starter plan or lowest-priced active plan)
+  let trialPlan = await db.plan.findFirst({
     where: { isActive: true, isFree: false, trialDays: { gt: 0 } },
     orderBy: { sortOrder: 'asc' },
   })
 
   if (!trialPlan) {
-    throw new Error('No active trial-eligible plan found. Run the billing seed script.')
+    trialPlan = await db.plan.findFirst({
+      where: { slug: 'starter', isActive: true },
+    })
+  }
+
+  if (!trialPlan) {
+    trialPlan = await db.plan.findFirst({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    })
+  }
+
+  if (!trialPlan) {
+    throw new Error('No active plan found. Run the billing seed script.')
   }
 
   const existing = await db.subscription.findUnique({
     where: { organizationId: tenantId },
+    include: { plan: true },
   })
-
-  if (existing) {
-    logger.info({ tenantId }, 'Subscription already exists, skipping trial creation')
-    return existing
-  }
 
   const now = new Date()
   const trialEnd = new Date(now)
-  trialEnd.setDate(trialEnd.getDate() + (trialPlan.trialDays || 7))
+  trialEnd.setDate(trialEnd.getDate() + 7)
+
+  if (existing) {
+    const isLegacyFree = !existing.plan || existing.plan.isFree || existing.plan.slug === 'free'
+    
+    // Check if existing trial exceeds 7 days from now (e.g. legacy 14-day trials)
+    const sevenDaysFromNow = new Date(now)
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
+    const isExcessiveTrial = existing.status === 'TRIALING' && existing.trialEnd && existing.trialEnd.getTime() > (sevenDaysFromNow.getTime() + 86400000)
+
+    if (isLegacyFree || isExcessiveTrial) {
+      const updated = await db.subscription.update({
+        where: { id: existing.id },
+        data: {
+          planId: trialPlan.id,
+          status: 'TRIALING',
+          trialStart: now,
+          trialEnd,
+          currency: trialPlan.currency,
+          currentPeriodStart: now,
+          currentPeriodEnd: trialEnd,
+        },
+        include: { plan: { include: { entitlements: true } } },
+      })
+      await invalidateEntitlementCache(tenantId)
+      logger.info({ tenantId }, 'Recalibrated subscription to strict 7-day Starter trial')
+      return updated
+    }
+    logger.info({ tenantId }, 'Subscription already exists, skipping trial creation')
+    return existing
+  }
 
   const sub = await db.$transaction(async (tx) => {
     const subscription = await tx.subscription.create({
@@ -790,10 +829,13 @@ async function executeScheduledPlanChange(
       data: {
         planId: newPlan.id,
         nextPlanId: null,
-        amount: sub.billingCycle === 'YEARLY' ? newPlan.yearlyPrice : newPlan.monthlyPrice,
+        amount: newPlan.isFree ? 0 : sub.billingCycle === 'YEARLY' ? newPlan.yearlyPrice : newPlan.monthlyPrice,
+        currency: newPlan.currency || sub.currency,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
-        status: newPlan.isFree ? 'ACTIVE' : 'ACTIVE',
+        status: 'ACTIVE',
+        razorpaySubscriptionId: newPlan.isFree ? null : sub.razorpaySubscriptionId,
+        cancelAtPeriodEnd: false,
       },
     })
 
@@ -809,6 +851,16 @@ async function executeScheduledPlanChange(
 
     return subscription
   })
+
+  // Cancel Razorpay subscription if moving to free plan
+  if (newPlan.isFree && sub.razorpaySubscriptionId) {
+    try {
+      const { cancelRazorpaySubscription } = await import('./razorpay')
+      await cancelRazorpaySubscription(sub.razorpaySubscriptionId, true)
+    } catch (err) {
+      logger.error({ err, subscriptionId: sub.id }, 'Failed to cancel Razorpay subscription on free downgrade')
+    }
+  }
 
   await resetScanCounter(sub.organizationId)
   await invalidateEntitlementCache(sub.organizationId)

@@ -63,15 +63,13 @@ export function PlanCard({
         <div className="my-6">
           <div className="flex items-baseline space-x-1">
             <span className="text-4xl font-extrabold tracking-tight text-white">
-              {plan.isFree ? 'Free' : formatPrice(price)}
+              {formatPrice(price)}
             </span>
-            {!plan.isFree && (
-              <span className="text-xs text-slate-400 font-medium">
-                /{currentCycle === 'YEARLY' ? 'year' : 'month'}
-              </span>
-            )}
+            <span className="text-xs text-slate-400 font-medium">
+              /{currentCycle === 'YEARLY' ? 'year' : 'month'}
+            </span>
           </div>
-          {currentCycle === 'YEARLY' && !plan.isFree && (
+          {currentCycle === 'YEARLY' && (
             <p className="text-[11px] text-emerald-400 font-medium mt-1">
               Equivalent to {formatPrice(Math.round(price / 12))}/mo
             </p>
@@ -141,11 +139,9 @@ export function PlanCard({
         >
           {isCurrentPlan
             ? 'Current Plan'
-            : plan.isFree
-              ? 'Switch to Free'
-              : canTrial && plan.trialDays && plan.trialDays > 0 && onStartTrial
-                ? 'Or Subscribe Now'
-                : 'Upgrade Plan'}
+            : canTrial && plan.trialDays && plan.trialDays > 0 && onStartTrial
+              ? 'Or Subscribe Now'
+              : 'Upgrade Plan'}
         </button>
       </div>
     </div>

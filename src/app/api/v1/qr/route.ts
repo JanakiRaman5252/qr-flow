@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const { requireFeature } = await import('@/lib/billing/entitlements')
+    await requireFeature(auth.orgId!, 'API_ACCESS', 'pro')
     const qrCodes = await db.qRCode.findMany({
       where: { organizationId: auth.orgId, isInTrash: false },
       orderBy: { createdAt: 'desc' },
@@ -68,7 +70,16 @@ export async function POST(req: NextRequest) {
     })
 
     // Pre-cache in Redis for instant redirect
-    await redis.set(`qr:short:${shortCode}`, destinationUrl, { ex: 600 })
+    const cachePayload = {
+      destinationUrl,
+      isArchived: false,
+      isInTrash: false,
+      expiresAt: null,
+      startsAt: null,
+      maxScans: null,
+      scanCount: 0,
+    }
+    await redis.set(`qr:short:${shortCode}`, JSON.stringify(cachePayload), { ex: 600 })
 
     return NextResponse.json({ success: true, data: qr }, { status: 201 })
   } catch (error) {

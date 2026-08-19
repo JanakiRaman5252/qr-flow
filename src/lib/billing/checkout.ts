@@ -53,10 +53,16 @@ export async function createCheckout(
     where: { organizationId: tenantId },
   })
 
-  if (existing && ['ACTIVE', 'TRIALING'].includes(existing.status) && existing.razorpaySubscriptionId) {
+  if (
+    existing &&
+    existing.status === 'ACTIVE' &&
+    existing.planId === plan.id &&
+    existing.billingCycle === billingCycle &&
+    existing.razorpaySubscriptionId
+  ) {
     throw new BillingError({
       code: 'PLAN_CHANGE_PENDING',
-      message: 'You already have an active subscription. Use upgrade or downgrade instead.',
+      message: 'You are already subscribed to this plan and billing cycle.',
     }, 400)
   }
 

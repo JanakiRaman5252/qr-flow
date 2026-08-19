@@ -43,12 +43,27 @@ export async function getEntitlements(tenantId: string): Promise<EntitlementResu
     // Redis unavailable — continue without cache
   }
 
-  const subscription = await db.subscription.findUnique({
+  let subscription = await db.subscription.findUnique({
     where: { organizationId: tenantId },
     include: {
       plan: { include: { entitlements: true } },
     },
   })
+
+  if (!subscription || !subscription.plan || subscription.plan.isFree || subscription.plan.slug === 'free') {
+    try {
+      const { createTrialSubscription } = await import('@/lib/billing/subscription')
+      await createTrialSubscription(tenantId)
+      subscription = await db.subscription.findUnique({
+        where: { organizationId: tenantId },
+        include: {
+          plan: { include: { entitlements: true } },
+        },
+      })
+    } catch {
+      // Fallback if DB write fails
+    }
+  }
 
   if (!subscription || !subscription.plan) {
     return []

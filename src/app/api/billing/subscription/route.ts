@@ -10,8 +10,18 @@ export async function GET() {
 
     let subscription = await getActiveSubscription(orgId)
 
-    // Auto-create 7-day trial subscription if none exists
-    if (!subscription) {
+    const now = new Date()
+    const maxAllowedEnd = new Date(now)
+    maxAllowedEnd.setDate(maxAllowedEnd.getDate() + 8)
+
+    const needsRecalibration =
+      !subscription ||
+      !subscription.plan ||
+      subscription.plan.isFree ||
+      subscription.plan.slug === 'free' ||
+      (subscription.status === 'TRIALING' && subscription.trialEnd && new Date(subscription.trialEnd) > maxAllowedEnd)
+
+    if (needsRecalibration) {
       await createTrialSubscription(orgId)
       subscription = await getActiveSubscription(orgId)
     }

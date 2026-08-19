@@ -4,7 +4,8 @@ import { getActivePlans } from '@/lib/billing/plans'
 
 export async function GET() {
   try {
-    const plans = await getActivePlans()
+    const allPlans = await getActivePlans()
+    const plans = allPlans.filter((p) => !p.isFree)
     return NextResponse.json({ success: true, data: plans })
   } catch (error) {
     console.error('GET /api/billing/plans Error:', error)

@@ -159,7 +159,7 @@ export function MobileHeader() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-white truncate">{userProfile?.name || 'User'}</p>
-                <p className="text-[11px] text-slate-400 truncate">{userProfile?.plan || 'Free'} Plan</p>
+                <p className="text-[11px] text-slate-400 truncate">{userProfile?.plan || 'Starter'} Plan</p>
               </div>
             </Link>
 

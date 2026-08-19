@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { Plus, Search, QrCode, ExternalLink, Download, Trash2, Copy, BarChart3, Star, Loader2, Folder as FolderIcon, Tag as TagIcon, Edit3, Filter } from 'lucide-react'
 import { QRDownloadModal } from '@/components/qr/qr-download-modal'
 import { QROrganizeModal } from '@/components/qr/qr-organize-modal'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface FolderItem {
   id: string
@@ -235,11 +236,13 @@ function QRListContent() {
         </div>
       )}
 
-      {/* QR List */}
+      {/* QR List Skeleton */}
       {isLoading ? (
-        <div className="py-24 text-center text-slate-500 flex items-center justify-center gap-2 font-medium">
-          <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
-          <span>Loading QR codes...</span>
+        <div className="space-y-4">
+          <Skeleton className="h-20 rounded-2xl" />
+          <Skeleton className="h-20 rounded-2xl" />
+          <Skeleton className="h-20 rounded-2xl" />
+          <Skeleton className="h-20 rounded-2xl" />
         </div>
       ) : (
         <div className="space-y-3">
@@ -409,7 +412,7 @@ export default function QRListPage() {
   return (
     <Suspense fallback={
       <div className="py-24 text-center text-slate-500 flex items-center justify-center gap-2 font-medium">
-        <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+        <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
         <span>Loading...</span>
       </div>
     }>

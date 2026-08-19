@@ -3,12 +3,17 @@ import Link from 'next/link'
 import { getActivePlans, formatPrice } from '@/lib/billing/plans'
 import { Check, Sparkles, ArrowRight } from 'lucide-react'
 
-export const revalidate = 60 // Cache for 60 seconds
+export const dynamic = 'force-dynamic'
 
 export default async function PublicPricingPage() {
   // Filter out any legacy free plans from the pricing page
-  const allPlans = await getActivePlans()
-  const plans = allPlans.filter((p) => !p.isFree)
+  let plans: any[] = []
+  try {
+    const allPlans = await getActivePlans()
+    plans = allPlans.filter((p) => !p.isFree)
+  } catch (err) {
+    console.error('Failed to fetch pricing plans:', err)
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 py-20 px-4 sm:px-6 lg:px-8">

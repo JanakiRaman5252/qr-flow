@@ -41,7 +41,7 @@ export async function GET() {
           name: organization.name,
           slug: organization.slug,
         },
-        plan: subscription?.plan?.name || 'Free',
+        plan: subscription?.plan?.name || 'Starter',
         isSuperAdmin,
       },
     })

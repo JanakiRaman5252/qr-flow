@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   Loader2,
   Sparkles,
+  Clock,
+  ArrowRight,
 } from 'lucide-react'
 import { UsageCard } from '@/components/billing/UsageCard'
 import { SubscriptionStatusBadge } from '@/components/billing/SubscriptionStatus'
@@ -18,6 +20,7 @@ import { PlanCard } from '@/components/billing/PlanCard'
 import { PaymentHistory } from '@/components/billing/PaymentHistory'
 import { TrialBanner } from '@/components/billing/TrialBanner'
 import { formatPrice } from '@/lib/billing/plans'
+import { Skeleton } from '@/components/ui/skeleton'
 
 declare global {
   interface Window {
@@ -271,9 +274,83 @@ export default function BillingPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-96 items-center justify-center space-x-3 bg-slate-950 text-slate-400">
-        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
-        <span className="text-sm font-medium">Loading billing details...</span>
+      <div className="p-4 sm:p-6 md:p-8 space-y-8 sm:space-y-10 bg-slate-950 text-slate-50 min-h-screen w-full max-w-full">
+        {/* Header Skeleton */}
+        <div className="space-y-3">
+          <Skeleton className="h-8 w-56 rounded-lg" />
+          <Skeleton className="h-4 w-96 max-w-full rounded-md" />
+        </div>
+
+        {/* Trial Banner Skeleton */}
+        <div className="rounded-2xl border border-indigo-500/20 bg-slate-900/40 p-5 backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center space-x-3 w-full sm:w-auto">
+            <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-4 w-40 rounded-md" />
+              <Skeleton className="h-3 w-64 max-w-full rounded-md" />
+            </div>
+          </div>
+          <Skeleton className="h-10 w-32 rounded-xl shrink-0" />
+        </div>
+
+        {/* Current Active Plan Overview Card Skeleton */}
+        <div className="rounded-3xl border border-slate-800/80 bg-slate-900/60 p-8 backdrop-blur-xl space-y-6 relative overflow-hidden">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-4 flex-1">
+              <div className="flex items-center space-x-3">
+                <Skeleton className="h-3.5 w-36 rounded-md" />
+                <Skeleton className="h-5 w-36 rounded-full" />
+              </div>
+              <div className="flex items-baseline space-x-3">
+                <Skeleton className="h-9 w-44 rounded-lg" />
+                <Skeleton className="h-6 w-28 rounded-md" />
+              </div>
+              <Skeleton className="h-4 w-80 max-w-full rounded-md" />
+              <Skeleton className="h-10 w-72 rounded-xl mt-2" />
+            </div>
+            <Skeleton className="h-12 w-36 rounded-xl" />
+          </div>
+        </div>
+
+        {/* Real-time Usage & Quota Cards Skeleton */}
+        <div className="space-y-4">
+          <Skeleton className="h-6 w-36 rounded-md" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-32 rounded-md" />
+                  <Skeleton className="w-9 h-9 rounded-xl" />
+                </div>
+                <Skeleton className="h-7 w-24 rounded-lg" />
+                <Skeleton className="h-2.5 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Available Upgrade Plans Grid Skeleton */}
+        <div className="space-y-6">
+          <Skeleton className="h-6 w-48 rounded-md" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-3xl border border-slate-800/90 bg-slate-900/50 p-8 space-y-6">
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-28 rounded-md" />
+                  <Skeleton className="h-3.5 w-48 rounded-md" />
+                </div>
+                <Skeleton className="h-10 w-36 rounded-lg" />
+                <Skeleton className="h-11 w-full rounded-xl" />
+                <div className="space-y-3 pt-4 border-t border-slate-800/60">
+                  <Skeleton className="h-4 w-full rounded-md" />
+                  <Skeleton className="h-4 w-5/6 rounded-md" />
+                  <Skeleton className="h-4 w-4/6 rounded-md" />
+                  <Skeleton className="h-4 w-5/6 rounded-md" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
@@ -335,44 +412,67 @@ export default function BillingPage() {
           <div className="space-y-3">
             <div className="flex items-center space-x-3">
               <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Current Workspace Plan</span>
-              <SubscriptionStatusBadge
-                status={subscription?.status || 'ACTIVE'}
-                cancelAtPeriodEnd={subscription?.cancelAtPeriodEnd}
-              />
+              {isTrialing ? (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  Starter (7-Day Trial)
+                </span>
+              ) : (
+                <SubscriptionStatusBadge
+                  status={subscription?.status || 'ACTIVE'}
+                  cancelAtPeriodEnd={subscription?.cancelAtPeriodEnd}
+                />
+              )}
             </div>
 
             <div className="flex items-baseline space-x-3">
-              <h2 className="text-3xl font-black text-white">{currentPlan?.name || 'Trial'}</h2>
+              <h2 className="text-3xl font-black text-white">{currentPlan?.name || 'Starter'}</h2>
               {subscription?.amount ? (
                 <span className="text-sm font-semibold text-slate-400">
                   ({formatPrice(subscription.amount, subscription.currency)}/{subscription.billingCycle?.toLowerCase()})
                 </span>
-              ) : null}
+              ) : (
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  7-Day Free Trial
+                </span>
+              )}
             </div>
 
-            <p className="text-xs text-slate-400 max-w-lg">
-              {currentPlan?.description || 'Basic QR generation and analytics.'}
-              {isTrialing && subscription?.trialEnd ? (
-                <span className="block mt-1 text-indigo-400 font-medium">
-                  Trial ends on {new Date(subscription.trialEnd).toLocaleDateString()}
-                </span>
+            <div className="text-xs text-slate-400 max-w-lg space-y-1">
+              <p>{currentPlan?.description || 'Essential tools for creators and small businesses.'}</p>
+              {subscription?.trialEnd ? (
+                <div className="mt-2 inline-flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-300">
+                  <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>
+                    Trial Period: <strong className="text-white">7 Days</strong> (Ends{' '}
+                    <strong className="text-indigo-300">
+                      {new Date(subscription.trialEnd).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </strong>
+                    )
+                  </span>
+                </div>
               ) : subscription?.currentPeriodEnd ? (
-                <span className="block mt-1 text-slate-400">
+                <p className="mt-1 text-slate-400">
                   {subscription.cancelAtPeriodEnd
                     ? `Access ends on ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}`
                     : `Renews on ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}`}
-                </span>
+                </p>
               ) : null}
-            </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {isTrialing ? (
+            {isTrialing || subscription?.status === 'EXPIRED' || subscription?.status === 'CANCELED' ? (
               <button
                 onClick={handleTrialUpgrade}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-lg shadow-indigo-600/30"
+                className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30"
               >
-                Upgrade to Paid Plan
+                <Sparkles className="w-4 h-4" />
+                <span>Upgrade Plan</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             ) : subscription?.cancelAtPeriodEnd ? (
               <button

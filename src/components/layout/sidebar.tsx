@@ -465,7 +465,7 @@ export function DashboardSidebar() {
                     </p>
 
                     <p className="text-[11px] text-slate-400 truncate">
-                      {userProfile?.plan || 'Free'} Plan
+                      {userProfile?.plan || 'Starter'} Plan
                     </p>
                   </div>
                 </Link>
@@ -691,7 +691,7 @@ export function DashboardSidebar() {
                 </p>
 
                 <p className="text-[11px] text-slate-400 truncate">
-                  {userProfile?.plan || 'Free'} Plan
+                  {userProfile?.plan || 'Starter'} Plan
                 </p>
               </div>
             </Link>

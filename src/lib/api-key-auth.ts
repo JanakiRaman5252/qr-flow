@@ -34,10 +34,13 @@ export async function validateApiKey(
   }
 
   try {
-    const apiKey = await db.aPIKey.findUnique({
-      where: { key: keyString },
-      include: { organization: true },
-    })
+    const apiKey = await Promise.race([
+      db.aPIKey.findUnique({
+        where: { key: keyString },
+        include: { organization: true },
+      }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+    ])
 
     if (!apiKey) {
       return { authenticated: false, error: 'Invalid API key provided.' }

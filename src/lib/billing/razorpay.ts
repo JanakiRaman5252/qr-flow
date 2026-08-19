@@ -16,10 +16,12 @@ if (!razorpayKeyId || !razorpayKeySecret) {
   logger.warn('Razorpay credentials not configured — billing features will be unavailable')
 }
 
-export const razorpay = new Razorpay({
-  key_id: razorpayKeyId || '',
-  key_secret: razorpayKeySecret || '',
-})
+export const razorpay = (razorpayKeyId && razorpayKeySecret
+  ? new Razorpay({
+      key_id: razorpayKeyId,
+      key_secret: razorpayKeySecret,
+    })
+  : null) as Razorpay
 
 // ── Signature Verification ──────────────────
 

@@ -41,6 +41,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const { requireFeature } = await import('@/lib/billing/entitlements')
+    await requireFeature(orgId, 'API_ACCESS', 'pro')
+
     const { name, scopes } = await req.json()
 
     if (!name) {
