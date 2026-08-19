@@ -80,7 +80,88 @@ export async function POST(req: NextRequest) {
 
     return response
   } catch (error) {
-    console.error('POST /api/user/workspaces Error:', error)
-    return NextResponse.json({ error: 'Failed to switch workspace' }, { status: 500 })
+    const { handleApiError } = await import('@/lib/errors')
+    return handleApiError(error)
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const { orgId, role } = await getCurrentUserAndOrg()
+
+    if (role !== 'OWNER' && role !== 'ADMIN') {
+      return NextResponse.json(
+        { success: false, error: { message: 'Only Workspace Owners and Admins can rename the workspace.' } },
+        { status: 403 }
+      )
+    }
+
+    const { name } = await req.json()
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return NextResponse.json({ success: false, error: { message: 'Workspace name is required.' } }, { status: 400 })
+    }
+
+    const updatedOrg = await db.organization.update({
+      where: { id: orgId },
+      data: { name: name.trim() },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+      },
+    })
+
+    return NextResponse.json({
+      success: true,
+      data: updatedOrg,
+      message: 'Workspace name updated successfully!',
+    })
+  } catch (error) {
+    const { handleApiError } = await import('@/lib/errors')
+    return handleApiError(error)
+  }
+}
+
+export async function DELETE() {
+  try {
+    const { userId, orgId, role } = await getCurrentUserAndOrg()
+
+    if (role !== 'OWNER') {
+      return NextResponse.json(
+        { success: false, error: { message: 'Only the Workspace Owner can delete the workspace.' } },
+        { status: 403 }
+      )
+    }
+
+    // Prevent deleting if it's the user's only workspace
+    const userMemberships = await db.member.findMany({
+      where: { userId },
+    })
+
+    if (userMemberships.length <= 1) {
+      return NextResponse.json(
+        { success: false, error: { message: 'Cannot delete your only workspace. Create another workspace before deleting this one.' } },
+        { status: 400 }
+      )
+    }
+
+    // Delete organization and all cascades
+    await db.organization.delete({
+      where: { id: orgId },
+    })
+
+    const response = NextResponse.json({
+      success: true,
+      message: 'Workspace deleted successfully.',
+    })
+
+    // Clear active workspace cookie
+    response.cookies.delete('dynoqr_active_org_id')
+
+    return response
+  } catch (error) {
+    const { handleApiError } = await import('@/lib/errors')
+    return handleApiError(error)
   }
 }
