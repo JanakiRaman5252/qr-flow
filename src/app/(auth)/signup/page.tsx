@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { QrCode, Mail, Lock, User, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
+import { QrCode, Mail, Lock, User, ArrowRight, Loader2, AlertCircle, AlertTriangle, X } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { ButtonSpinner } from '@/components/ui/loader'
 
@@ -17,6 +17,8 @@ export default function SignupPage() {
   const [isVerificationSent, setIsVerificationSent] = useState(false)
   const [resendStatus, setResendStatus] = useState('')
   const [isResending, setIsResending] = useState(false)
+  const [showAlreadyExistsModal, setShowAlreadyExistsModal] = useState(false)
+  const [existingUserEmail, setExistingUserEmail] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,9 +31,33 @@ export default function SignupPage() {
       return
     }
 
+    const cleanEmail = email.trim().toLowerCase()
+
+    // Pre-check if account already exists in database
+    try {
+      const checkRes = await fetch(`/api/auth/check-email?email=${encodeURIComponent(cleanEmail)}`)
+      if (checkRes.ok) {
+        const checkData = await checkRes.json()
+        if (checkData.exists) {
+          setIsLoading(false)
+          setIsVerificationSent(false)
+          setExistingUserEmail(cleanEmail)
+          setShowAlreadyExistsModal(true)
+          if (checkData.emailVerified) {
+            setError(`This account (${cleanEmail}) already exists and is already verified. Please sign in to access your account.`)
+          } else {
+            setError(`An account with ${cleanEmail} already exists. Please sign in to access your account.`)
+          }
+          return
+        }
+      }
+    } catch (checkErr) {
+      console.warn('[Check email pre-check error]:', checkErr)
+    }
+
     const result = await authClient.signUp.email({
       name,
-      email: email.trim().toLowerCase(),
+      email: cleanEmail,
       password,
     })
 
@@ -43,12 +69,16 @@ export default function SignupPage() {
         msg.toLowerCase().includes('registered') ||
         (result.error as any)?.code === 'USER_ALREADY_EXISTS'
 
+      setIsLoading(false)
+      setIsVerificationSent(false)
+
       if (isAlreadyExists) {
-        setError(`An account with ${email.trim().toLowerCase()} already exists. Each email address can only be associated with one account. Please sign in instead.`)
+        setExistingUserEmail(cleanEmail)
+        setShowAlreadyExistsModal(true)
+        setError(`An account with ${cleanEmail} already exists. Please sign in instead.`)
       } else {
         setError(msg || 'Failed to create account.')
       }
-      setIsLoading(false)
       return
     }
 
@@ -81,6 +111,53 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Account Already Exists Popup Modal */}
+      {showAlreadyExistsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-amber-500/30 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6 relative text-center">
+            <button
+              onClick={() => setShowAlreadyExistsModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-white tracking-tight">Account Already Exists</h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                An account with <span className="font-semibold text-amber-300">{existingUserEmail}</span> already exists and is already verified. No new email was sent.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-400">
+              Each email address can only be associated with one account. Please sign in to access your account.
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <Link
+                href={`/login?email=${encodeURIComponent(existingUserEmail)}`}
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all"
+              >
+                <span>Sign In to Your Account</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setShowAlreadyExistsModal(false)}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                Close & Use Different Email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-950 to-slate-950" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
