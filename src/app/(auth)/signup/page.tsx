@@ -59,6 +59,7 @@ export default function SignupPage() {
       name,
       email: cleanEmail,
       password,
+      callbackURL: '/dashboard',
     })
 
     if (result.error) {

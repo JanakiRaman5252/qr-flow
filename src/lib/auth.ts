@@ -61,10 +61,26 @@ export const auth = betterAuth({
     autoSignInAfterVerification: true,
     expiresIn: 3600,
 
-    async sendVerificationEmail({ user, url }) {
+    async sendVerificationEmail({ user, url, token }) {
       console.log(
         `[Better Auth] Sending verification email to ${user.email}`
       )
+
+      const baseUrl = getAppUrl()
+      let verificationToken = token
+      if (!verificationToken && url) {
+        try {
+          verificationToken = new URL(url).searchParams.get('token') || ''
+        } catch {
+          verificationToken = ''
+        }
+      }
+
+      const verificationUrl = verificationToken
+        ? `${baseUrl}/verify-email?token=${verificationToken}&callbackURL=${encodeURIComponent('/dashboard')}`
+        : url
+
+      console.log(`[Verification Link]: ${verificationUrl}`)
 
       const result = await sendEmail({
         to: user.email,
@@ -77,7 +93,7 @@ Thanks for signing up for QRFlow.
 
 Verify your email address:
 
-${url}
+${verificationUrl}
 
 This link expires in 1 hour.
 
@@ -93,12 +109,12 @@ If you did not create this account, you can ignore this email.
 
             <p style="color: #475569; line-height: 1.6;">
               Hi ${user.name || 'there'}, thanks for signing up.
-              Please verify your email address to continue.
+              Please verify your email address to continue to your dashboard.
             </p>
 
             <div style="margin: 30px 0;">
               <a
-                href="${url}"
+                href="${verificationUrl}"
                 target="_blank"
                 rel="noopener noreferrer"
                 style="
@@ -120,7 +136,7 @@ If you did not create this account, you can ignore this email.
             </p>
 
             <p style="font-size: 12px; color: #4f46e5; word-break: break-all;">
-              ${url}
+              ${verificationUrl}
             </p>
 
             <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
