@@ -31,12 +31,23 @@ export default function SignupPage() {
 
     const result = await authClient.signUp.email({
       name,
-      email,
+      email: email.trim().toLowerCase(),
       password,
     })
 
     if (result.error) {
-      setError(result.error.message || 'Failed to create account.')
+      const msg = result.error.message || ''
+      const isAlreadyExists =
+        msg.toLowerCase().includes('already') ||
+        msg.toLowerCase().includes('exist') ||
+        msg.toLowerCase().includes('registered') ||
+        (result.error as any)?.code === 'USER_ALREADY_EXISTS'
+
+      if (isAlreadyExists) {
+        setError(`An account with ${email.trim().toLowerCase()} already exists. Each email address can only be associated with one account. Please sign in instead.`)
+      } else {
+        setError(msg || 'Failed to create account.')
+      }
       setIsLoading(false)
       return
     }
@@ -178,9 +189,22 @@ export default function SignupPage() {
               </div>
 
               {error && (
-                <div className="mb-4 flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{error}</span>
+                <div className="mb-4 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs sm:text-sm space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                  {error.includes('already exists') && (
+                    <div className="pt-1 pl-6">
+                      <Link
+                        href={`/login?email=${encodeURIComponent(email)}`}
+                        className="inline-flex items-center space-x-1 font-bold text-indigo-400 hover:text-indigo-300 underline text-xs"
+                      >
+                        <span>Sign in to your existing account</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  )}
                 </div>
               )}
 
